@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title></title>
   <link rel="stylesheet" href="options.css">
 </head>
+
 <body>
   <form>
     <section class="group">
@@ -116,15 +118,18 @@
           <span class="toggle"></span>
         </label>
       </section>
-      <section class="checkbox desktop">
+      <section class="select desktop">
         <label>
-          <span id="fullWidthContentLabel">Full-width timeline content</span>
-          <input type="checkbox" name="fullWidthContent">
-          <span class="toggle"></span>
+          <span id="timelineWidthLabel">Timeline width</span>
+          <select name="timelineWidth">
+            <option value="default">Default</option>
+            <option value="650">650px</option>
+            <option value="700">700px</option>
+            <option value="750">750px</option>
+            <option value="800">800px</option>
+            <option value="full">Full width</option>
+          </select>
         </label>
-        <p id="fullWidthContentInfo">
-          Hide the sidebar and let timeline content go full-width
-        </p>
         <section class="checkbox fullWidthContent">
           <label>
             <span id="fullWidthMediaLabel">Full-width media &amp; cards</span>
@@ -132,6 +137,16 @@
             <span class="toggle"></span>
           </label>
         </section>
+      </section>
+      <section class="select desktop timelineAlignmentSection">
+        <label>
+          <span id="timelineAlignmentLabel">Timeline alignment</span>
+          <select name="timelineAlignment">
+            <option value="left">Left</option>
+            <option value="center">Center</option>
+            <option value="right">Right</option>
+          </select>
+        </label>
       </section>
     </section>
 
@@ -150,7 +165,8 @@
       <section class="checkbox">
         <label>
           <span id="addAddMutedWordMenuItemLabel_desktop" class="desktop">Add "Add muted word" to the "More" menu</span>
-          <span id="addAddMutedWordMenuItemLabel_mobile" class="mobile">Add "Add muted word" to the slide-out menu</span>
+          <span id="addAddMutedWordMenuItemLabel_mobile" class="mobile">Add "Add muted word" to the slide-out
+            menu</span>
           <input type="checkbox" name="addAddMutedWordMenuItem">
           <span class="toggle"></span>
         </label>
@@ -595,6 +611,51 @@
           <span class="toggle"></span>
         </label>
       </section>
+      <section class="checkbox">
+        <label>
+          <span id="removeTimelineBordersLabel">Remove timeline borders</span>
+          <input type="checkbox" name="removeTimelineBorders">
+          <span class="toggle"></span>
+        </label>
+      </section>
+      <section class="checkbox">
+        <label>
+          <span id="removeTweetBordersLabel">Remove borders between tweets</span>
+          <input type="checkbox" name="removeTweetBorders">
+          <span class="toggle"></span>
+        </label>
+      </section>
+      <section class="checkbox">
+        <label>
+          <span id="hideStickyHeaderLabel">Hide sticky timeline header</span>
+          <input type="checkbox" name="hideStickyHeader">
+          <span class="toggle"></span>
+        </label>
+      </section>
+      <section class="select desktop">
+        <label>
+          <span id="showLabelsLabel">Navigation labels</span>
+          <select name="showLabels">
+            <option value="always">Always</option>
+            <option value="hover">On hover</option>
+            <option value="never">Never</option>
+          </select>
+        </label>
+      </section>
+      <section class="checkbox desktop">
+        <label>
+          <span id="centerNavigationLabel">Center navigation bar vertically</span>
+          <input type="checkbox" name="centerNavigation">
+          <span class="toggle"></span>
+        </label>
+      </section>
+      <section class="checkbox desktop">
+        <label>
+          <span id="collapsibleSearchLabel">Collapsible floating search</span>
+          <input type="checkbox" name="collapsibleSearch">
+          <span class="toggle"></span>
+        </label>
+      </section>
     </section>
 
     <section class="group labelled desktop">
@@ -718,7 +779,7 @@
               <input type="checkbox" name="hideBookmarkMetrics">
               <span class="toggle"></span>
             </label>
-         </section>
+          </section>
           <section class="checkbox">
             <label>
               <span id="hideFollowingMetricsLabel">Following / followers</span>
@@ -765,7 +826,8 @@
           <label>
             <span id="disabledHomeTimelineRedirectLabel">Redirect home timeline to</span>
             <select name="disabledHomeTimelineRedirect">
-              <option value="notifications" class="notificationsLabel" id="disabledHomeTimelineRedirectOption_notifications">Notifications</option>
+              <option value="notifications" class="notificationsLabel"
+                id="disabledHomeTimelineRedirectOption_notifications">Notifications</option>
               <option value="messages" id="disabledHomeTimelineRedirectOption_messages">Messages</option>
             </select>
           </label>
@@ -888,8 +950,10 @@
     </section>
     <section class="group labelled">
       <label>
-        <span id="hideMoreSlideOutMenuItemsOptionsLabel_desktop" class="desktop">Hide "More" menu items you don't use</span>
-        <span id="hideMoreSlideOutMenuItemsOptionsLabel_mobile" class="mobile">Hide slide-out menu items you don't use</span>
+        <span id="hideMoreSlideOutMenuItemsOptionsLabel_desktop" class="desktop">Hide "More" menu items you don't
+          use</span>
+        <span id="hideMoreSlideOutMenuItemsOptionsLabel_mobile" class="mobile">Hide slide-out menu items you don't
+          use</span>
       </label>
       <section class="checkbox mobile">
         <label>
@@ -1017,4 +1081,5 @@
   </form>
   <script src="options.js"></script>
 </body>
+
 </html>

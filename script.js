@@ -2,6 +2,11 @@ void function() {
 
 const XMLHttpRequest_open = XMLHttpRequest.prototype.open
 XMLHttpRequest.prototype.open = function(method, url) {
+  // @ts-expect-error
+  this._url = url
+  // @ts-expect-error
+  this._method = typeof method === 'string' ? method.toUpperCase() : method
+
   if (!config.enabled) return XMLHttpRequest_open.apply(this, [method, url])
 
   if (config.sortReplies != 'relevant' && !userSortedReplies && url.includes('/TweetDetail?')) {
@@ -60,6 +65,21 @@ XMLHttpRequest.prototype.open = function(method, url) {
 
 const XMLHttpRequest_send = XMLHttpRequest.prototype.send
 XMLHttpRequest.prototype.send = function(body) {
+  if (config.enabled) {
+    this.addEventListener('load', function() {
+      try {
+        // @ts-expect-error
+        let reqUrl = this._url || ''
+        if (this.status === 200 && this.responseText &&
+          /(api\.)?(twitter|x)\.com\/(i\/api\/)?(2|graphql|1\.1)\//i.test(reqUrl)) {
+          extractAndCacheMediaFromResponse(this.responseText)
+        }
+      } catch (e) {
+        warn('Error extracting media from API response:', e)
+      }
+    })
+  }
+
   if (
     !config.enabled || !body ||
     // @ts-expect-error
@@ -131,6 +151,11 @@ const config = {
   disableHomeTimeline: false,
   disabledHomeTimelineRedirect: 'notifications',
   disableTweetTextFormatting: false,
+  // Downloads
+  downloadMedia: true,
+  downloadFilenameFormat: '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}',
+  downloadSubfolder: '',
+  downloadVideoQuality: 'highest',
   dontUseChirpFont: false,
   dropdownMenuFontWeight: true,
   fastBlock: true,
@@ -2285,6 +2310,7 @@ const Selectors = {
 
 /** @enum {string} */
 const Svgs = {
+  DOWNLOAD_PATH: 'M12 2.5a.75.75 0 0 1 .75.75v10.19l3.72-3.72a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-5-5a.75.75 0 1 1 1.06-1.06l3.72 3.72V3.25A.75.75 0 0 1 12 2.5ZM3.75 18a.75.75 0 0 1 .75.75v1.5c0 .414.336.75.75.75h13.5a.75.75 0 0 1 .75-.75v-1.5a.75.75 0 0 1 1.5 0v1.5A2.25 2.25 0 0 1 18.75 22H5.25A2.25 2.25 0 0 1 3 19.75v-1.5a.75.75 0 0 1 .75-.75Z',
   BLUE_LOGO_PATH: 'M16.5 3H2v18h15c3.038 0 5.5-2.46 5.5-5.5 0-1.4-.524-2.68-1.385-3.65-.08-.09-.089-.22-.023-.32.574-.87.908-1.91.908-3.03C22 5.46 19.538 3 16.5 3zm-.796 5.99c.457-.05.892-.17 1.296-.35-.302.45-.684.84-1.125 1.15.004.1.006.19.006.29 0 2.94-2.269 6.32-6.421 6.32-1.274 0-2.46-.37-3.459-1 .177.02.357.03.539.03 1.057 0 2.03-.35 2.803-.95-.988-.02-1.821-.66-2.109-1.54.138.03.28.04.425.04.206 0 .405-.03.595-.08-1.033-.2-1.811-1.1-1.811-2.18v-.03c.305.17.652.27 1.023.28-.606-.4-1.004-1.08-1.004-1.85 0-.4.111-.78.305-1.11 1.113 1.34 2.775 2.22 4.652 2.32-.038-.17-.058-.33-.058-.51 0-1.23 1.01-2.22 2.256-2.22.649 0 1.235.27 1.647.7.514-.1.997-.28 1.433-.54-.168.52-.526.96-.992 1.23z',
   MUTE: '<g><path d="M18 6.59V1.2L8.71 7H5.5C4.12 7 3 8.12 3 9.5v5C3 15.88 4.12 17 5.5 17h2.09l-2.3 2.29 1.42 1.42 15.5-15.5-1.42-1.42L18 6.59zm-8 8V8.55l6-3.75v3.79l-6 6zM5 9.5c0-.28.22-.5.5-.5H8v6H5.5c-.28 0-.5-.22-.5-.5v-5zm6.5 9.24l1.45-1.45L16 19.2V14l2 .02v8.78l-6.5-4.06z"></path></g>',
   PROMOTED_PATH: 'M19.498 3h-15c-1.381 0-2.5 1.12-2.5 2.5v13c0 1.38 1.119 2.5 2.5 2.5h15c1.381 0 2.5-1.12 2.5-2.5v-13c0-1.38-1.119-2.5-2.5-2.5zm-3.502 12h-2v-3.59l-5.293 5.3-1.414-1.42L12.581 10H8.996V8h7v7z',
@@ -3868,6 +3894,468 @@ async function observeIndividualTweetTimeline(page) {
 }
 //#endregion
 
+//#region Media download
+/** @type {Map<string, any[]>} */
+const tweetMediaCache = new Map()
+const MAX_MEDIA_CACHE_SIZE = 200
+
+function extractAndCacheMediaFromResponse(responseText) {
+  try {
+    let data = JSON.parse(responseText)
+    extractMediaEntities(data)
+  } catch { }
+}
+
+function extractMediaEntities(obj) {
+  if (!obj || typeof obj !== 'object') return
+  if (obj.extended_entities?.media && Array.isArray(obj.extended_entities.media)) {
+    let id = obj.id_str || obj.conversation_id_str
+    if (id && !tweetMediaCache.has(id)) {
+      cacheMedia(id, obj.extended_entities.media)
+    }
+  }
+  if (obj.tweet_results?.result) {
+    let tweet = obj.tweet_results.result.tweet || obj.tweet_results.result
+    let legacy = tweet.legacy
+    if (legacy?.extended_entities?.media) {
+      let id = legacy.id_str || tweet.rest_id
+      if (id && !tweetMediaCache.has(id)) {
+        cacheMedia(id, legacy.extended_entities.media)
+      }
+    }
+  }
+  if (typeof obj.string_value === 'string' && obj.string_value.includes('media_entities')) {
+    try {
+      let parsed = JSON.parse(obj.string_value)
+      if (parsed.media_entities) {
+        let mediaArr = Object.values(parsed.media_entities)
+        let id = mediaArr[0]?.id_str
+        if (id && !tweetMediaCache.has(id)) {
+          cacheMedia(id, mediaArr)
+        }
+      }
+    } catch { }
+  }
+  for (let key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      let val = obj[key]
+      if (val && typeof val === 'object' && key !== 'user' && key !== 'core') {
+        extractMediaEntities(val)
+      }
+    }
+  }
+}
+
+function cacheMedia(tweetId, mediaList) {
+  if (tweetMediaCache.size >= MAX_MEDIA_CACHE_SIZE) {
+    let oldestKey = tweetMediaCache.keys().next().value
+    if (oldestKey) tweetMediaCache.delete(oldestKey)
+  }
+  tweetMediaCache.set(tweetId, mediaList)
+}
+
+function getTweetMetadata($tweet) {
+  let $time = $tweet.querySelector('time')
+  let $timeLink = $time?.closest('a')
+  let href = $timeLink?.getAttribute('href') || ''
+  let match = href.match(/^\/([a-zA-Z\d_]{1,20})\/status\/(\d+)/)
+
+  let username = match?.[1]
+  let tweetId = match?.[2]
+
+  if (!tweetId && location.pathname.match(URL_TWEET_BASE_RE)) {
+    let focusedMatch = location.pathname.match(URL_TWEET_BASE_RE)
+    username ||= focusedMatch?.[1]
+    tweetId ||= focusedMatch?.[2]
+  }
+
+  let $userNameContainer = $tweet.querySelector('[data-testid="User-Name"]')
+  let author = ''
+  let handle = ''
+  if ($userNameContainer) {
+    let $authorLink = $userNameContainer.querySelector('a')
+    if ($authorLink) {
+      author = $authorLink.textContent?.trim() || ''
+    }
+    let $allSpans = $userNameContainer.querySelectorAll('span')
+    for (let $span of $allSpans) {
+      let text = $span.textContent?.trim() || ''
+      if (text.startsWith('@')) {
+        handle = text
+        break
+      }
+    }
+  }
+
+  if (!handle && username) {
+    handle = `@${username}`
+  }
+  if (!author) {
+    author = username || 'twitter_user'
+  }
+
+  let $textEl = $tweet.querySelector('[data-testid="tweetText"]')
+  let title = ''
+  if ($textEl) {
+    title = Array.from($textEl.childNodes, node => {
+      if (node.nodeType === 1 && node.nodeName === 'IMG') {
+        return /** @type {HTMLImageElement} */ (node).alt || ''
+      }
+      return node.textContent || ''
+    }).join('').trim()
+  }
+
+  let timestamp = null
+  let timeAttr = $time?.getAttribute('datetime')
+  if (timeAttr) {
+    let parsed = new Date(timeAttr)
+    if (!isNaN(parsed.getTime())) {
+      timestamp = parsed
+    }
+  }
+  if (!timestamp) {
+    timestamp = new Date()
+  }
+
+  return {
+    author: author || 'twitter_user',
+    username: handle || (username ? `@${username}` : '@user'),
+    title: title || '',
+    tweetId: tweetId || '',
+    timestamp,
+  }
+}
+
+function resolveTweetMedia($tweet) {
+  let { tweetId } = getTweetMetadata($tweet)
+  let mediaEntities = null
+
+  if (tweetId) {
+    mediaEntities = tweetMediaCache.get(tweetId)
+    if (!mediaEntities) {
+      let tweetInfo = getTweetInfo(tweetId)
+      mediaEntities = tweetInfo?.extended_entities?.media
+    }
+  }
+
+  /** @type {Array<{url: string, type: 'image' | 'video' | 'gif', ext: string}>} */
+  let resolved = []
+
+  if (mediaEntities && Array.isArray(mediaEntities) && mediaEntities.length > 0) {
+    for (let item of mediaEntities) {
+      if (item.type === 'video' || item.type === 'animated_gif') {
+        let variants = item.video_info?.variants
+        if (variants && Array.isArray(variants)) {
+          let mp4Variants = variants
+            .filter(v => v.content_type === 'video/mp4')
+            .sort((a, b) => config.downloadVideoQuality === 'lowest'
+              ? (a.bitrate || 0) - (b.bitrate || 0)
+              : (b.bitrate || 0) - (a.bitrate || 0))
+          if (mp4Variants.length > 0) {
+            resolved.push({
+              url: mp4Variants[0].url,
+              type: item.type === 'animated_gif' ? 'gif' : 'video',
+              ext: 'mp4',
+            })
+            continue
+          }
+        }
+      }
+      if (item.media_url_https) {
+        let photoUrl = item.media_url_https
+        if (photoUrl.includes('?')) {
+          photoUrl = photoUrl.replace(/name=[a-zA-Z0-9]+/, 'name=orig')
+          if (!photoUrl.includes('name=')) photoUrl += '&name=orig'
+        } else {
+          photoUrl = `${photoUrl}?format=jpg&name=orig`
+        }
+        let extMatch = photoUrl.match(/format=([a-zA-Z0-9]+)/) || photoUrl.match(/\.([a-zA-Z0-9]+)(?:\?|$)/)
+        let ext = extMatch ? extMatch[1] : 'jpg'
+        resolved.push({
+          url: photoUrl,
+          type: 'image',
+          ext,
+        })
+      }
+    }
+  }
+
+  // DOM Fallback for photos if API cache did not capture them
+  if (resolved.length === 0) {
+    let $photos = $tweet.querySelectorAll('img[src*="pbs.twimg.com/media/"]')
+    let seenUrls = new Set()
+    for (let $img of $photos) {
+      let src = /** @type {HTMLImageElement} */ ($img).src
+      if (!src || seenUrls.has(src)) continue
+      seenUrls.add(src)
+      let origUrl = src
+      if (origUrl.includes('?')) {
+        origUrl = origUrl.replace(/name=[a-zA-Z0-9]+/, 'name=orig')
+        if (!origUrl.includes('name=')) origUrl += '&name=orig'
+      } else {
+        origUrl = `${origUrl}?format=jpg&name=orig`
+      }
+      let extMatch = origUrl.match(/format=([a-zA-Z0-9]+)/) || origUrl.match(/\.([a-zA-Z0-9]+)(?:\?|$)/)
+      let ext = extMatch ? extMatch[1] : 'jpg'
+      resolved.push({
+        url: origUrl,
+        type: 'image',
+        ext,
+      })
+    }
+  }
+
+  return resolved
+}
+
+/**
+ * Resolves legacy format presets into standard template strings.
+ * @param {string} format
+ * @returns {string}
+ */
+function normalizeFilenameTemplate(format) {
+  if (typeof format !== 'string' || !format.trim()) {
+    return '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}'
+  }
+  let trimmed = format.trim()
+  if (trimmed === 'username_id') return '{username}_{tweet_id}'
+  if (trimmed === 'id') return '{tweet_id}'
+  if (trimmed === 'username_type_id') return '{username}_{type}_{tweet_id}'
+  return trimmed
+}
+
+/**
+ * Expands tokens within a template based on metadata.
+ * @param {string} template
+ * @param {object} metadata
+ * @returns {string}
+ */
+function expandTokens(template, metadata = {}) {
+  let d = metadata.timestamp instanceof Date ? metadata.timestamp : (metadata.timestamp ? new Date(metadata.timestamp) : new Date())
+  if (isNaN(d.getTime())) d = new Date()
+
+  const tokenMap = {
+    '{yyyy}': String(d.getFullYear()),
+    '{yy}': String(d.getFullYear()).slice(-2),
+    '{mm}': String(d.getMonth() + 1).padStart(2, '0'),
+    '{m}': String(d.getMonth() + 1),
+    '{dd}': String(d.getDate()).padStart(2, '0'),
+    '{d}': String(d.getDate()),
+    '{hh}': String(d.getHours()).padStart(2, '0'),
+    '{h}': String(d.getHours()),
+    '{MM}': String(d.getMinutes()).padStart(2, '0'),
+    '{ss}': String(d.getSeconds()).padStart(2, '0'),
+    '{ms}': String(d.getMilliseconds()).padStart(3, '0'),
+    '{author}': metadata.author != null ? String(metadata.author) : '',
+    '{username}': metadata.username != null ? String(metadata.username) : '',
+    '{title}': metadata.title != null ? String(metadata.title) : '',
+    '{tweet_id}': metadata.tweetId != null ? String(metadata.tweetId) : '',
+    '{type}': metadata.type != null ? String(metadata.type) : 'media',
+  }
+
+  return template.replace(/\{(yyyy|yy|mm|m|dd|d|hh|h|MM|ss|ms|author|username|title|tweet_id|type)\}/g, (match) => {
+    return tokenMap[match] !== undefined ? tokenMap[match] : match
+  })
+}
+
+/**
+ * Sanitizes a filename base string to be filesystem and path safe.
+ * @param {string} str
+ * @returns {string}
+ */
+function sanitizeFilenameBase(str) {
+  if (typeof str !== 'string') return ''
+  let sanitized = str
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\x00-\x1f\x7f-\x9f]/g, '')
+    .replace(/[/\\:*?"<>|]/g, '_')
+    .replace(/\s+/g, ' ')
+    .replace(/_+/g, '_')
+    .replace(/^[\s._]+|[\s._]+$/g, '')
+    .trim()
+
+  const MAX_FILENAME_BASE_LENGTH = 180
+  if (sanitized.length > MAX_FILENAME_BASE_LENGTH) {
+    sanitized = sanitized.slice(0, MAX_FILENAME_BASE_LENGTH).replace(/^[\s._]+|[\s._]+$/g, '').trim()
+  }
+
+  return sanitized
+}
+
+/**
+ * Generates the final media filename given metadata, index, total, extension, and template.
+ * Fully backwards compatible with legacy parameter signature:
+ * (username, tweetId, index, total, ext, mediaType, format)
+ */
+function generateMediaFilename(metadataOrUser, tweetIdOrIndex, indexOrTotal, totalOrExt, extOrType, mediaTypeOrFormat, formatOrTemplate) {
+  let metadata = {}
+  let index = 0
+  let total = 1
+  let ext = 'mp4'
+  let rawTemplate = '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}'
+
+  if (typeof metadataOrUser === 'object' && metadataOrUser !== null) {
+    metadata = metadataOrUser
+    index = Number(tweetIdOrIndex) || 0
+    total = Number(indexOrTotal) || 1
+    ext = totalOrExt || 'mp4'
+    rawTemplate = extOrType || '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}'
+  } else {
+    let username = metadataOrUser || 'user'
+    let tweetId = tweetIdOrIndex || ''
+    index = Number(indexOrTotal) || 0
+    total = Number(totalOrExt) || 1
+    ext = extOrType || 'mp4'
+    let mediaType = mediaTypeOrFormat || 'media'
+    rawTemplate = formatOrTemplate || '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}'
+
+    metadata = {
+      author: username,
+      username,
+      tweetId,
+      type: mediaType,
+      title: '',
+      timestamp: new Date(),
+    }
+  }
+
+  let template = normalizeFilenameTemplate(rawTemplate)
+  let expanded = expandTokens(template, metadata)
+  let sanitized = sanitizeFilenameBase(expanded)
+
+  if (!sanitized) {
+    let fallbackUser = sanitizeFilenameBase(metadata.username || metadata.author || 'twitter_user') || 'twitter_user'
+    let fallbackId = metadata.tweetId || `${Date.now()}`
+    sanitized = `${fallbackUser}_${fallbackId}`
+  }
+
+  let indexStr = total > 1 ? `_${String(index + 1).padStart(2, '0')}` : ''
+  let cleanExt = String(ext || 'mp4').replace(/^\.+/, '').toLowerCase()
+
+  let hasExt = new RegExp(`\\.${cleanExt}$`, 'i').test(sanitized)
+  let baseWithoutExt = hasExt ? sanitized.slice(0, -(cleanExt.length + 1)) : sanitized
+
+  return `${baseWithoutExt}${indexStr}.${cleanExt}`
+}
+
+function createSvgIcon(pathData, className) {
+  let svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  if (className) svg.setAttribute('class', className)
+  let path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', pathData)
+  svg.appendChild(path)
+  return svg
+}
+
+function createLoadingSvg(className) {
+  let svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  if (className) svg.setAttribute('class', className)
+  let circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+  circle.setAttribute('cx', '12')
+  circle.setAttribute('cy', '12')
+  circle.setAttribute('r', '9')
+  circle.setAttribute('fill', 'none')
+  circle.setAttribute('stroke-width', '3')
+  svg.appendChild(circle)
+  return svg
+}
+
+function addDownloadButton($tweet) {
+  if (!config.enabled) return
+  if (!config.downloadMedia) return
+  if ($tweet.querySelector('.cpft_download_action')) return
+
+  let hasMedia = $tweet.querySelector('[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="videoComponent"], video')
+  if (!hasMedia) return
+
+  let $actionBar = $tweet.querySelector('[role="group"]')
+  if (!$actionBar) return
+
+  let $btnContainer = document.createElement('div')
+  $btnContainer.className = 'cpft_download_action'
+
+  let $btn = document.createElement('button')
+  $btn.type = 'button'
+  $btn.setAttribute('role', 'button')
+  $btn.setAttribute('aria-label', 'Download')
+  $btn.setAttribute('title', 'Download media')
+  $btn.className = 'cpft_download_button'
+
+  let $iconWrapper = document.createElement('div')
+  $iconWrapper.className = 'cpft_download_icon_wrapper'
+
+  $iconWrapper.appendChild(createSvgIcon(Svgs.DOWNLOAD_PATH, 'cpft_download_icon'))
+  $iconWrapper.appendChild(createLoadingSvg('cpft_loading_icon'))
+  $iconWrapper.appendChild(createSvgIcon(Svgs.SUCCESS_PATH, 'cpft_success_icon'))
+
+  $btn.appendChild($iconWrapper)
+
+  $btn.addEventListener('click', async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!config.downloadMedia) return
+    if ($btn.disabled) return
+    $btn.disabled = true
+    $btn.classList.add('cpft_loading')
+
+    try {
+      let mediaItems = resolveTweetMedia($tweet)
+      if (!mediaItems || mediaItems.length === 0) {
+        log('No downloadable media could be resolved for tweet')
+        $btn.classList.remove('cpft_loading')
+        $btn.classList.add('cpft_error')
+        $btn.setAttribute('title', 'Media not available')
+        setTimeout(() => {
+          $btn.classList.remove('cpft_error')
+          $btn.setAttribute('title', 'Download media')
+          $btn.disabled = false
+        }, 2000)
+        return
+      }
+
+      let metadata = getTweetMetadata($tweet)
+      for (let i = 0; i < mediaItems.length; i++) {
+        let item = mediaItems[i]
+        let itemMetadata = { ...metadata, type: item.type }
+        let filename = generateMediaFilename(itemMetadata, i, mediaItems.length, item.ext, config.downloadFilenameFormat)
+        document.dispatchEvent(new CustomEvent('cpftDownloadMedia', {
+          detail: {
+            url: item.url,
+            filename,
+            subfolder: config.downloadSubfolder || '',
+            tweetId: metadata.tweetId,
+            username: metadata.username,
+          }
+        }))
+      }
+
+      $btn.classList.remove('cpft_loading')
+      $btn.classList.add('cpft_success')
+      setTimeout(() => {
+        $btn.classList.remove('cpft_success')
+        $btn.disabled = false
+      }, 2500)
+    } catch (err) {
+      error('Download error:', err)
+      $btn.classList.remove('cpft_loading')
+      $btn.classList.add('cpft_error')
+      setTimeout(() => {
+        $btn.classList.remove('cpft_error')
+        $btn.disabled = false
+      }, 2000)
+    }
+  })
+
+  $btnContainer.appendChild($btn)
+  $actionBar.appendChild($btnContainer)
+}
+//#endregion
+
 //#region Tweak functions
 async function addAccountLocationToFocusedTweet($permalinkBar, screenName) {
   if (!config.addFocusedTweetAccountLocation) return
@@ -4201,6 +4689,73 @@ const configureCss = (() => {
           background-color: var(--cpft-hover-bg) !important;
         }
       }
+    .cpft_download_action {
+      display: flex;
+      align-items: center;
+    }
+    .cpft_download_button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      color: var(--cpft-text-secondary);
+      border-radius: 9999px;
+      outline: none;
+      transition: background-color 0.2s, color 0.2s;
+    }
+    .cpft_download_button:hover {
+      color: rgb(29, 155, 240);
+      background-color: rgba(29, 155, 240, 0.1);
+    }
+    .cpft_download_icon_wrapper {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+    }
+    .cpft_download_icon_wrapper svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+    .cpft_loading_icon,
+    .cpft_success_icon {
+      display: none;
+    }
+    .cpft_download_button.cpft_loading .cpft_download_icon {
+      display: none;
+    }
+    .cpft_download_button.cpft_loading .cpft_loading_icon {
+      display: block;
+      animation: cpft_spin 0.75s linear infinite;
+    }
+    .cpft_download_button.cpft_loading .cpft_loading_icon circle {
+      stroke: currentColor;
+      stroke-dasharray: 40;
+      stroke-dashoffset: 15;
+    }
+    .cpft_download_button.cpft_success {
+      color: rgb(0, 186, 124) !important;
+    }
+    .cpft_download_button.cpft_success .cpft_download_icon,
+    .cpft_download_button.cpft_success .cpft_loading_icon {
+      display: none;
+    }
+    .cpft_download_button.cpft_success .cpft_success_icon {
+      display: block;
+    }
+    .cpft_download_button.cpft_error {
+      color: rgb(244, 33, 46) !important;
+    }
+    @keyframes cpft_spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
     `)
 
     if (config.darkModeTheme != 'lightsOut') {
@@ -4432,9 +4987,9 @@ const configureCss = (() => {
     if (config.hideShareTweetButton) {
       hideCssSelectors.push(
         // Under timeline tweets
-        `[data-testid="tweet"][tabindex="0"] [role="group"] > div[style]:not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR})`,
+        `[data-testid="tweet"][tabindex="0"] [role="group"] > div[style]:not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR}, .cpft_download_action)`,
         // Under the focused tweet
-        `[data-testid="tweet"][tabindex="-1"] [role="group"] > div[style]:not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR})`,
+        `[data-testid="tweet"][tabindex="-1"] [role="group"] > div[style]:not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR}, .cpft_download_action)`,
       )
     }
     if (config.hideSortRepliesMenu) {
@@ -5029,7 +5584,7 @@ const configureCss = (() => {
       if (config.hideShareTweetButton) {
         hideCssSelectors.push(
           // In media modal
-          `[aria-modal="true"] div > div:first-of-type [role="group"] > div[style]:not([role]):not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR})`,
+          `[aria-modal="true"] div > div:first-of-type [role="group"] > div[style]:not([role]):not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR}, .cpft_download_action)`,
         )
       }
       if (config.hideExploreNav) {
@@ -5162,7 +5717,7 @@ const configureCss = (() => {
       if (config.hideShareTweetButton) {
         hideCssSelectors.push(
           // In media viewer and media modal
-          `body:is(.MediaViewer, .MobileMedia) [role="group"] > div[style]:not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR})`,
+          `body:is(.MediaViewer, .MobileMedia) [role="group"] > div[style]:not(${TWITTER_MEDIA_ASSIST_BUTTON_SELECTOR}, .cpft_download_action)`,
         )
       }
       if (config.hideViews) {
@@ -6219,6 +6774,10 @@ function onTimelineChange($timeline, page, options = {}) {
       if (!hideItem && config.restoreLinkHeadlines) {
         restoreLinkHeadline($tweet)
       }
+
+      if (!hideItem) {
+        addDownloadButton($tweet)
+      }
     }
     else if (isOnNotificationsTimeline) {
       /** @type {?import("./types").NotificationType} */
@@ -6454,6 +7013,10 @@ function onIndividualTweetTimelineChange($timeline, options) {
 
       if (!hideItem && config.restoreLinkHeadlines) {
         restoreLinkHeadline($tweet)
+      }
+
+      if (!hideItem) {
+        addDownloadButton($tweet)
       }
     }
     else {
@@ -7298,6 +7861,7 @@ async function tweakFocusedTweet($focusedTweet, options) {
   if ($actionBar) {
     $actionBar.id = 'cpftFocusedTweetActionBar'
     restoreTweetInteractionsLinks({$actionBar, $focusedTweet, tweetInfo, isOwnTweet})
+    addDownloadButton($focusedTweet)
   } else {
     warn('focused tweet action bar not found')
   }
@@ -8137,6 +8701,7 @@ function configChanged(changes) {
       // adding a hidden attribute won't hide them by default.
       document.querySelector('#cpftSeparatedTweetsTab')?.remove()
       document.querySelectorAll('.cpft_menu_item').forEach(el => el.remove())
+      document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
       disconnectObservers(modalObservers, 'modal')
       disconnectObservers(pageObservers, 'page')
       disconnectObservers(globalObservers, 'global')
@@ -8162,6 +8727,9 @@ function configChanged(changes) {
   }
   if ('replaceLogo' in changes || 'hideNotifications' in changes) {
     observeFavicon.forceUpdate(getNotificationCount() > 0)
+  }
+  if ('downloadMedia' in changes && !changes.downloadMedia) {
+    document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
   }
   // Store the current notification count if hiding notifications was enabled
   if ('hideNotifications' in changes && config.hideNotifications != 'ignore') {
@@ -8198,6 +8766,9 @@ let $settings = /** @type {HTMLScriptElement} */ (document.querySelector('script
 if ($settings) {
   try {
     Object.assign(config, JSON.parse($settings.innerText))
+    if (config.downloadFilenameFormat) {
+      config.downloadFilenameFormat = normalizeFilenameTemplate(config.downloadFilenameFormat)
+    }
   } catch(e) {
     error('error parsing initial settings', e)
   }
@@ -8220,6 +8791,9 @@ if ($settings) {
       return
     }
 
+    if (configChanges.downloadFilenameFormat) {
+      configChanges.downloadFilenameFormat = normalizeFilenameTemplate(configChanges.downloadFilenameFormat)
+    }
     Object.assign(config, configChanges)
     configChanged(configChanges)
   })

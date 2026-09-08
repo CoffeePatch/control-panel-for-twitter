@@ -12,20 +12,36 @@ for (let optionValue of [
 }
 
 for (let optionValue of [
+  '650',
+  '700',
+  '750',
+  '800',
+  'always',
   'badges',
+  'center',
   'comfortable',
   'compact',
   'default',
   'dim',
+  'full',
   'hide',
+  'highest',
+  'hover',
+  'id',
   'ignore',
+  'left',
   'lightsOut',
   'liked',
+  'lowest',
   'mostRecent',
+  'never',
   'popular',
   'recent',
   'relevant',
+  'right',
   'separate',
+  'username_id',
+  'username_type_id',
 ]) {
   let label = chrome.i18n.getMessage(`option_${optionValue}`)
   for (let $option of document.querySelectorAll(`option[value="${optionValue}"]`)) {
@@ -40,6 +56,7 @@ for (let translationId of [
   'addFocusedTweetAccountLocationLabel',
   'alwaysUseLatestTweetsLabel',
   'bypassAgeVerificationLabel',
+  'centerNavigationLabel',
   'customCssLabel',
   'darkModeThemeLabel',
   'debugInfo',
@@ -53,6 +70,19 @@ for (let translationId of [
   'disabledHomeTimelineRedirectLabel',
   'disabledHomeTimelineRedirectOption_messages',
   'dontUseChirpFontLabel',
+  'downloadFilenameFormatLabel',
+  'downloadFilenameArgumentsLabel',
+  'downloadFilenameDateGroup',
+  'downloadFilenameTimeGroup',
+  'downloadFilenameTweetGroup',
+  'downloadFilenameMediaGroup',
+  'downloadFilenameExampleLabel',
+  'downloadFilenameResetLabel',
+  'downloadMediaLabel',
+  'downloadsOptionsLabel',
+  'downloadSubfolderInfo',
+  'downloadSubfolderLabel',
+  'downloadVideoQualityLabel',
   'dropdownMenuFontWeightLabel',
   'enabled',
   'experimentsOptionsLabel',
@@ -61,8 +91,6 @@ for (let translationId of [
   'followButtonStyleLabel',
   'followButtonStyleOption_monochrome',
   'followButtonStyleOption_themed',
-  'fullWidthContentInfo',
-  'fullWidthContentLabel',
   'fullWidthMediaLabel',
   'hideAccountSwitcherLabel',
   'hideAdsNavLabel',
@@ -101,6 +129,7 @@ for (let translationId of [
   'hideShareTweetButtonLabel',
   'hideSidebarContentLabel',
   'hideSpacesNavLabel',
+  'hideStickyHeaderLabel',
   'hideSubscriptionsLabel',
   'hideSuggestedContentSearchLabel',
   'hideSuggestedFollowsLabel',
@@ -128,6 +157,8 @@ for (let translationId of [
   'reduceEngagementOptionsLabel',
   'reducedInteractionModeInfo',
   'reducedInteractionModeLabel',
+  'removeTimelineBordersLabel',
+  'removeTweetBordersLabel',
   'replaceLogoLabel',
   'restoreLinkHeadlinesLabel',
   'restoreOtherInteractionLinksLabel',
@@ -146,6 +177,10 @@ for (let translationId of [
   'sidebarLabel',
   'sortFollowingLabel',
   'sortRepliesLabel',
+  'timelineAlignmentLabel',
+  'timelineWidthLabel',
+  'showLabelsLabel',
+  'collapsibleSearchLabel',
   'tweakNewLayoutInfo',
   'tweakNewLayoutLabel',
   'tweakQuoteTweetsPageLabel',
@@ -222,6 +257,15 @@ const defaultConfig = {
   downloadFilenameFormat: '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}',
   downloadSubfolder: '',
   downloadVideoQuality: 'highest',
+  // Timeline / Layout
+  timelineWidth: 'default',
+  timelineAlignment: 'center',
+  showLabels: 'always',
+  removeTimelineBorders: false,
+  removeTweetBorders: false,
+  hideStickyHeader: false,
+  centerNavigation: false,
+  collapsibleSearch: false,
   dontUseChirpFont: false,
   dropdownMenuFontWeight: true,
   fastBlock: true,
@@ -359,13 +403,13 @@ function exportConfig() {
   $a.download = 'control-panel-for-twitter-v4.24.0.config.txt'
   $a.href = URL.createObjectURL(new Blob([
     JSON.stringify(optionsConfig, null, 2)
-  ], {type: 'text/plain'}))
+  ], { type: 'text/plain' }))
   $a.click()
   URL.revokeObjectURL($a.href)
 }
 
 function formatFollowerCount(num) {
-  let numFormat = Intl.NumberFormat(undefined, {notation: 'compact', compactDisplay: num < 1_000_000 ? 'short' : 'long'})
+  let numFormat = Intl.NumberFormat(undefined, { notation: 'compact', compactDisplay: num < 1_000_000 ? 'short' : 'long' })
   return numFormat.format(num)
 }
 
@@ -375,7 +419,7 @@ function formatFollowerCount(num) {
  * @param {...any} children
  * @returns {HTMLElement}
  */
- function h(tagName, attributes, ...children) {
+function h(tagName, attributes, ...children) {
   let $el = document.createElement(tagName)
 
   if (attributes) {
@@ -447,8 +491,8 @@ function onFormChanged(e) {
       optionsConfig[$el.name] = changedConfig[$el.name] = $el.checked
       // Don't try to redirect the Home timeline to Notifications if both are disabled
       if ($el.name == 'hideNotifications' &&
-          $el.checked &&
-          optionsConfig.disabledHomeTimelineRedirect == 'notifications') {
+        $el.checked &&
+        optionsConfig.disabledHomeTimelineRedirect == 'notifications') {
         $form.elements['disabledHomeTimelineRedirect'].value = 'messages'
         optionsConfig.disabledHomeTimelineRedirect = 'messages'
         changedConfig.disabledHomeTimelineRedirect = 'messages'
@@ -457,6 +501,10 @@ function onFormChanged(e) {
     }
   } else {
     optionsConfig[$el.name] = changedConfig[$el.name] = $el.value
+    if ($el.name == 'timelineWidth') {
+      let isFull = $el.value == 'full'
+      optionsConfig.fullWidthContent = changedConfig.fullWidthContent = isFull
+    }
   }
 
   updateDisplay()
@@ -469,7 +517,7 @@ function onFormChanged(e) {
  */
 function onStorageChanged(changes) {
   let configChanges = Object.fromEntries(
-    Object.entries(changes).map(([key, {newValue}]) => [key, newValue])
+    Object.entries(changes).map(([key, { newValue }]) => [key, newValue])
   )
   Object.assign(optionsConfig, configChanges)
   applyConfig()
@@ -515,7 +563,9 @@ function updateDisplay() {
   $body.classList.toggle('chronological', optionsConfig.alwaysUseLatestTweets)
   $body.classList.toggle('disabled', !optionsConfig.enabled)
   $body.classList.toggle('disabledHomeTimeline', optionsConfig.disableHomeTimeline)
-  $body.classList.toggle('fullWidthContent', optionsConfig.fullWidthContent)
+  $body.classList.toggle('downloadingMedia', Boolean(optionsConfig.downloadMedia))
+  let isFullWidth = optionsConfig.timelineWidth === 'full' || (optionsConfig.timelineWidth === 'default' && optionsConfig.fullWidthContent)
+  $body.classList.toggle('fullWidthContent', isFullWidth)
   $body.classList.toggle('hidingBookmarkButton', optionsConfig.hideBookmarkButton)
   $body.classList.toggle('hidingExploreNav', optionsConfig.hideExploreNav)
   $body.classList.toggle('hidingMetrics', optionsConfig.hideMetrics)
@@ -548,13 +598,13 @@ function updateHideQuotesFromDisplay() {
   for (let user of optionsConfig.hideQuotesFrom) {
     $hideQuotesFrom.appendChild(
       h('section', null,
-        h('label', {className: 'button'},
+        h('label', { className: 'button' },
           h('span', null, `@${user}`),
           h('button', {
             type: 'button',
             onclick() {
               optionsConfig.hideQuotesFrom = optionsConfig.hideQuotesFrom.filter(u => u != user)
-              storeConfigChanges({hideQuotesFrom: optionsConfig.hideQuotesFrom})
+              storeConfigChanges({ hideQuotesFrom: optionsConfig.hideQuotesFrom })
               updateDisplay()
             }
           }, chrome.i18n.getMessage('unmuteButtonText'))
@@ -573,21 +623,21 @@ function updateMutedQuotesDisplay() {
 
   while ($mutedQuotes.hasChildNodes()) $mutedQuotes.firstChild.remove()
 
-  optionsConfig.mutedQuotes.forEach(({user, time, text}, index) => {
+  optionsConfig.mutedQuotes.forEach(({ user, time, text }, index) => {
     $mutedQuotes.appendChild(
       h('section', null,
-        h('label', {className: 'button mutedQuote'},
+        h('label', { className: 'button mutedQuote' },
           h('div', null,
             user,
             ' – ',
-            new Intl.DateTimeFormat([], {dateStyle: 'medium'}).format(new Date(time)),
-            text && h('p', {className: 'mb-0'}, text),
+            new Intl.DateTimeFormat([], { dateStyle: 'medium' }).format(new Date(time)),
+            text && h('p', { className: 'mb-0' }, text),
           ),
           h('button', {
             type: 'button',
             onclick: () => {
               optionsConfig.mutedQuotes = optionsConfig.mutedQuotes.filter((_, i) => i != index)
-              chrome.storage.local.set({mutedQuotes: optionsConfig.mutedQuotes})
+              chrome.storage.local.set({ mutedQuotes: optionsConfig.mutedQuotes })
               updateDisplay()
             },
           }, chrome.i18n.getMessage('unmuteButtonText'))
@@ -599,14 +649,15 @@ function updateMutedQuotesDisplay() {
 
 function updateFormControls() {
   Object.keys(optionsConfig)
-        .filter(prop => prop in $form.elements)
-        .forEach(prop => updateFormControl($form.elements[prop], optionsConfig[prop]))
+    .filter(prop => prop in $form.elements)
+    .forEach(prop => updateFormControl($form.elements[prop], optionsConfig[prop]))
+  updateFilenamePreview()
 }
 
 function updateFormControl($control, value) {
   if ($control instanceof RadioNodeList) {
     // If a checkbox displays in multiple sections, update them all
-    $control.forEach(input => /** @type {HTMLInputElement} */ (input).checked = value)
+    $control.forEach(input => /** @type {HTMLInputElement} */(input).checked = value)
   }
   else if ($control.type == 'checkbox') {
     $control.checked = value
@@ -615,7 +666,6 @@ function updateFormControl($control, value) {
     $control.value = value
   }
 }
-//#endregion
 
 /**
  * Resolves legacy format presets into standard template strings.
@@ -811,10 +861,22 @@ function main() {
     if (storedConfig.twitterBlueChecks == 'dim') {
       storedConfig.twitterBlueChecks = 'replace'
     }
+    if (storedConfig.fullWidthContent && !storedConfig.timelineWidth) {
+      storedConfig.timelineWidth = 'full'
+    }
+    if (storedConfig.collapsibleSearch === undefined && storedConfig.transparentSearch !== undefined) {
+      storedConfig.collapsibleSearch = storedConfig.transparentSearch
+    }
+    if (!storedConfig.timelineAlignment) {
+      storedConfig.timelineAlignment = 'center'
+    }
+    if (!storedConfig.showLabels) {
+      storedConfig.showLabels = 'always'
+    }
     if (storedConfig.downloadFilenameFormat) {
       storedConfig.downloadFilenameFormat = normalizeFilenameTemplate(storedConfig.downloadFilenameFormat)
     }
-    optionsConfig = {...defaultConfig, ...storedConfig}
+    optionsConfig = { ...defaultConfig, ...storedConfig }
 
     $body.classList.toggle('debug', optionsConfig.debug === true)
     $experiments.open = Boolean(optionsConfig.customCss)
@@ -833,7 +895,7 @@ function main() {
       let debugCountdown = 5
 
       function onClick(e) {
-        if (e.target === $version || $version.contains(/** @type {Node} */ (e.target))) {
+        if (e.target === $version || $version.contains(/** @type {Node} */(e.target))) {
           debugCountdown--
         } else {
           debugCountdown = 5

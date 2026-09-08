@@ -19,6 +19,15 @@ export type Config = {
   downloadFilenameFormat: string
   downloadSubfolder: string
   downloadVideoQuality: 'highest' | 'lowest'
+  // Timeline / Layout
+  timelineWidth: 'default' | '650' | '700' | '750' | '800' | 'full'
+  timelineAlignment: 'left' | 'center' | 'right'
+  showLabels: 'always' | 'hover' | 'never'
+  removeTimelineBorders: boolean
+  removeTweetBorders: boolean
+  hideStickyHeader: boolean
+  centerNavigation: boolean
+  collapsibleSearch: boolean
   dontUseChirpFont: boolean
   dropdownMenuFontWeight: boolean
   fastBlock: boolean
@@ -178,9 +187,9 @@ export type LocaleKey =
 
 export type LocaleStringKey = Exclude<LocaleKey, `${string}_FN`>
 
-export type NamedMutationObserver = MutationObserver & {name: string}
+export type NamedMutationObserver = MutationObserver & { name: string }
 
-export type Disconnectable = {name: string, disconnect(): void}
+export type Disconnectable = { name: string, disconnect(): void }
 
 export type QuotedTweet = {
   quotedBy: string
@@ -249,6 +258,6 @@ export type UserInfo = {
   followersCount: number
 }
 
-export type UserInfoObject = {[index: string]: UserInfo}
+export type UserInfoObject = { [index: string]: UserInfo }
 
 export type VerifiedType = 'BLUE' | 'BUSINESS' | 'GOVERNMENT'

@@ -156,6 +156,15 @@ const config = {
   downloadFilenameFormat: '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}',
   downloadSubfolder: '',
   downloadVideoQuality: 'highest',
+  // Timeline / Layout
+  timelineWidth: 'default',
+  timelineAlignment: 'center',
+  showLabels: 'always',
+  centerNavigation: false,
+  removeTimelineBorders: false,
+  removeTweetBorders: false,
+  hideStickyHeader: false,
+  collapsibleSearch: false,
   dontUseChirpFont: false,
   dropdownMenuFontWeight: true,
   fastBlock: true,
@@ -3683,6 +3692,45 @@ const observeSideNavTweetButton = (() => {
   }
 })()
 
+let collapsibleSearchInitialized = false
+function setupCollapsibleSearch() {
+  if (collapsibleSearchInitialized) return
+  collapsibleSearchInitialized = true
+
+  document.addEventListener('focusin', (e) => {
+    let shouldReclaim = config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment
+    if (!desktop || !shouldReclaim || isOnSearchPage()) return
+    let $target = /** @type {HTMLElement} */ (e.target)
+    let $form = $target?.closest('form[role="search"]')
+    if ($form) {
+      $form.classList.add('SearchExpanded')
+    }
+  })
+
+  document.addEventListener('focusout', (e) => {
+    let shouldReclaim = config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment
+    if (!desktop || !shouldReclaim || isOnSearchPage()) return
+    let $related = /** @type {HTMLElement} */ (e.relatedTarget)
+    let $form = /** @type {HTMLElement} */ (e.target)?.closest('form[role="search"]')
+    if ($form && (!$related || !$related.closest('form[role="search"]'))) {
+      $form.classList.remove('SearchExpanded')
+    }
+  })
+
+  document.addEventListener('click', (e) => {
+    let shouldReclaim = config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment
+    if (!desktop || !shouldReclaim || isOnSearchPage()) return
+    let $target = /** @type {HTMLElement} */ (e.target)
+    let $form = $target?.closest('form[role="search"]')
+    if ($form) {
+      let $input = $form.querySelector('input[role="combobox"]')
+      if ($input && document.activeElement !== $input) {
+        /** @type {HTMLElement} */ ($input).focus()
+      }
+    }
+  })
+}
+
 async function observeSearchForm() {
   let $searchForm = await getElement('form[role="search"]', {
     name: 'search form',
@@ -5420,43 +5468,247 @@ const configureCss = (() => {
           )
         }
       }
-      if (config.fullWidthContent) {
+      if (config.removeTimelineBorders) {
         cssRules.push(`
-          /* Use full width when the sidebar is visible */
-          body.Sidebar${FULL_WIDTH_BODY_PSEUDO} ${Selectors.PRIMARY_COLUMN},
-          body.Sidebar${FULL_WIDTH_BODY_PSEUDO} ${Selectors.PRIMARY_COLUMN} > div:first-child > div:last-child {
-            max-width: 990px;
+        ${Selectors.PRIMARY_COLUMN} {
+          border-left-width: 0 !important;
+          border-right-width: 0 !important;
+        }
+      `)
+      }
+      if (config.removeTweetBorders) {
+        cssRules.push(`
+        ${Selectors.TWEET} {
+          border-bottom-width: 0 !important;
+        }
+      `)
+      }
+      if (config.hideStickyHeader) {
+        cssRules.push(`
+        div[data-testid="TopNavBar"],
+        ${Selectors.DESKTOP_TIMELINE_HEADER} {
+          display: none !important;
+        }
+      `)
+      }
+      let isFullWidth = config.timelineWidth === 'full' || (config.timelineWidth === 'default' && config.fullWidthContent)
+      let shouldReclaimSidebar = Boolean(config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment)
+      let alignment = config.timelineAlignment || 'center'
+      let alignRules = ''
+      if (alignment === 'left') {
+        let leftMargin = (config.showLabels === 'always' && shouldReclaimSidebar) ? '285px' : '100px'
+        alignRules = `
+          body:not(.Search) main[role="main"] {
+            align-items: flex-start !important;
+            overflow-x: clip;
+            overflow: visible !important;
           }
-          /* Make the "What's happening" input keep its original width */
-          body.HomeTimeline ${Selectors.PRIMARY_COLUMN} > div:first-child > div:nth-of-type(3) div[role="progressbar"] + div {
-            max-width: 598px;
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} {
+            margin-left: ${leftMargin} !important;
+            margin-right: auto !important;
           }
-          /* Use full width when the sidebar is not visible */
-          body:not(.Sidebar)${FULL_WIDTH_BODY_PSEUDO} header[role="banner"] {
-            flex-grow: 0;
+        `
+      } else if (alignment === 'right') {
+        alignRules = `
+          body:not(.Search) main[role="main"] {
+            align-items: flex-end !important;
+            overflow: visible !important;
           }
-          body:not(.Sidebar)${FULL_WIDTH_BODY_PSEUDO} main[role="main"] > div {
-            width: 100%;
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} {
+            margin-left: auto !important;
+            margin-right: 16px !important;
           }
-          body:not(.Sidebar)${FULL_WIDTH_BODY_PSEUDO} ${Selectors.PRIMARY_COLUMN} {
-            max-width: unset;
-            width: 100%;
+        `
+      } else {
+        // Default center alignment
+        alignRules = `
+          body:not(.Search) main[role="main"] {
+            align-items: center !important;
+            overflow-x: clip;
+            overflow: visible !important;
           }
-          body:not(.Sidebar)${FULL_WIDTH_BODY_PSEUDO} ${Selectors.PRIMARY_COLUMN} > div:first-child > div:first-child div,
-          body:not(.Sidebar)${FULL_WIDTH_BODY_PSEUDO} ${Selectors.PRIMARY_COLUMN} > div:first-child > div:last-child {
-            max-width: unset;
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} {
+            margin: 0 auto !important;
+          }
+        `
+      }
+
+      if (isFullWidth) {
+        let navWidth = (config.showLabels === "always" && shouldReclaimSidebar) ? "275px" : "88px"
+        cssRules.push(`
+        /* Genuine Full-Width Layout */
+        @media only screen and (min-width: 988px) {
+          header[role="banner"] {
+            flex-grow: 0 !important;
+          }
+          main[role="main"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            align-items: stretch !important;
+            flex-grow: 1 !important;
+            box-sizing: border-box !important;
+          }
+          main[role="main"] > div {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          main[role="main"] > div > div {
+            width: 100% !important;
+            max-width: 100% !important;
+            flex-grow: 1 !important;
+          }
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} {
+            width: 100% !important;
+            max-width: 100% !important;
+            flex-grow: 1 !important;
+            margin: 0 !important;
+            border-right-width: 0 !important;
+          }
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} > div {
+            width: 100% !important;
+            max-width: 100% !important;
+          }
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} > div > div,
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} > div > div div:not([data-testid="dm-message-list-container"] *) {
+            max-width: unset !important;
+          }
+        }
+        @media only screen and (min-width: 1265px) {
+          body:not(.Search) main[role="main"] {
+            margin-left: ${navWidth} !important;
+            width: calc(100% - ${navWidth}) !important;
+            max-width: calc(100% - ${navWidth}) !important;
+          }
+        }
+        @media only screen and (min-width: 988px) and (max-width: 1264px) {
+          body:not(.Search) main[role="main"] {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin-left: 0 !important;
+          }
+        }
+        /* Make the "What's happening" input keep its original width */
+        body.HomeTimeline ${Selectors.PRIMARY_COLUMN} > div:first-child > div:nth-of-type(3) div[role="progressbar"] + div {
+          max-width: 598px;
+        }
+      `)
+        if (config.fullWidthMedia) {
+          cssRules.push(`
+          /* Full-width media, videos & cards across all pages */
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} [data-testid="tweetPhoto"],
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} [data-testid="tweetPhoto"] img,
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} [data-testid="videoPlayer"],
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} [data-testid="videoComponent"],
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} [aria-label*="video" i],
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} [data-testid="card.layoutLarge.media"] {
+            max-width: 100% !important;
+            width: 100% !important;
+          }
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} [data-testid="tweetPhoto"] img {
+            height: 100% !important;
+            object-fit: cover !important;
           }
         `)
-        if (!config.fullWidthMedia) {
-          // Make media & cards keep their original width
+        } else {
+          // Normal-width media & quoted tweets
           cssRules.push(`
-            body${FULL_WIDTH_BODY_PSEUDO} ${Selectors.PRIMARY_COLUMN} ${Selectors.TWEET} > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div[id][aria-labelledby]:not(:empty) {
-              max-width: 504px;
-            }
-          `)
+          body:not(.Search) ${Selectors.PRIMARY_COLUMN} ${Selectors.TWEET} > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div[id][aria-labelledby]:not(:empty) {
+            max-width: 504px !important;
+          }
+        `)
         }
-        // Hide the sidebar when present
-        hideCssSelectors.push(`body.Sidebar${FULL_WIDTH_BODY_PSEUDO} ${Selectors.SIDEBAR}`)
+        if (!shouldReclaimSidebar) {
+          hideCssSelectors.push(`body.Sidebar ${Selectors.SIDEBAR}`)
+        }
+      } else if (config.timelineWidth && config.timelineWidth !== 'default') {
+        let width = parseInt(config.timelineWidth, 10)
+        if (!isNaN(width) && width >= 600 && width <= 900) {
+          cssRules.push(`
+          /* Custom timeline width and alignment layout rules */
+          @media only screen and (min-width: 1000px) {
+            ${alignRules}
+            ${Selectors.PRIMARY_COLUMN} > div > div:last-child,
+            ${Selectors.PRIMARY_COLUMN} > div > div:last-child div:not([data-testid="dm-message-list-container"] *) {
+              max-width: unset;
+            }
+          }
+          @media only screen and (min-width: 988px) {
+            ${Selectors.PRIMARY_COLUMN} {
+              width: ${width}px;
+              max-width: ${width}px;
+            }
+          }
+        `)
+        }
+      } else {
+        // Default timeline width with user-controlled alignment
+        cssRules.push(`
+        @media only screen and (min-width: 1000px) {
+          ${alignRules}
+          ${Selectors.PRIMARY_COLUMN} > div > div:last-child,
+          ${Selectors.PRIMARY_COLUMN} > div > div:last-child div:not([data-testid="dm-message-list-container"] *) {
+            max-width: unset;
+          }
+        }
+      `)
+      }
+
+      if (shouldReclaimSidebar) {
+        cssRules.push(`
+        /* Reclaim sidebar layout footprint on non-search pages */
+        @media only screen and (min-width: 988px) {
+          body:not(.Search) main[role="main"] > div,
+          body:not(.Search) main[role="main"] > div > div {
+            overflow: visible !important;
+          }
+          body:not(.Search) ${Selectors.SIDEBAR} {
+            visibility: hidden;
+            width: 0;
+            margin: 0;
+            padding: 0;
+            position: relative !important;
+            z-index: 99 !important;
+            overflow: visible !important;
+          }
+          body:not(.Search) ${Selectors.SIDEBAR} > div {
+            overflow: visible !important;
+          }
+        }
+        /* Floating search bar behavior */
+        @media only screen and (min-width: 988px) {
+          body:not(.Search) ${Selectors.SIDEBAR} form[role="search"] {
+            visibility: visible;
+            position: fixed;
+            top: 12px;
+            right: 16px;
+            width: auto;
+            z-index: 99;
+            z-index: 9999 !important;
+          }
+          body:not(.Search) ${Selectors.SIDEBAR} form[role="search"] input[role="combobox"] {
+            width: 150px;
+            transition: width 0.2s ease-in-out;
+          }
+          body:not(.Search) ${Selectors.SIDEBAR} form[role="search"]:is(:focus-within, .SearchExpanded) {
+            width: 374px;
+            max-width: calc(100vw - 32px) !important;
+            backdrop-filter: blur(12px);
+            z-index: 9999 !important;
+          }
+          body:not(.Search) ${Selectors.SIDEBAR} form[role="search"]:is(:focus-within, .SearchExpanded) input[role="combobox"] {
+            width: 100% !important;
+          }
+          body:not(.Search) ${Selectors.SIDEBAR} div[style*="left: -12px"],
+          body:not(.Search) ${Selectors.SIDEBAR} div[style*="left: -12px"] {
+            left: unset !important;
+          }
+          body:not(.Search) ${Selectors.SIDEBAR} div[style*="left: -8px"] {
+            left: unset !important;
+            width: 374px !important;
+            max-width: calc(100vw - 32px) !important;
+          }
+        }
+      `)
       }
       if (config.hideAccountSwitcher) {
         cssRules.push(`
@@ -5487,6 +5739,298 @@ const configureCss = (() => {
       }
       if (config.hideConnectNav) {
         hideCssSelectors.push(`${Selectors.PRIMARY_NAV_DESKTOP} a[href$="/i/connect_people"]`)
+      }
+      if (config.centerNavigation) {
+        cssRules.push(`
+        header[role="banner"] > div > div > div {
+          justify-content: center !important;
+          padding-top: 0 !important;
+        }
+      `)
+      }
+      if (shouldReclaimSidebar || config.showLabels !== 'always') {
+        cssRules.push(`
+        @media only screen and (min-width: 1000px) {
+          header[role="banner"] {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            height: 100% !important;
+            width: 275px !important;
+            align-items: flex-start !important;
+            z-index: 10 !important;
+            pointer-events: none !important;
+          }
+          header[role="banner"] > div > div > div {
+            width: 275px !important;
+            left: 0 !important;
+            align-items: flex-start !important;
+            overflow: visible !important;
+          }
+          header[role="banner"] a,
+          header[role="banner"] button,
+          header[role="banner"] [role="button"] {
+            pointer-events: auto !important;
+          }
+        }
+        @media only screen and (min-width: 1000px) and (max-width: 1264px) {
+          body {
+            padding-left: 88px !important;
+            box-sizing: border-box !important;
+          }
+        }
+      `)
+      }
+      if (config.showLabels === 'never') {
+        cssRules.push(`
+        @media only screen and (min-width: 1000px) {
+          /* Single vertical centerline alignment */
+          header h1 {
+            margin: 0 !important;
+          }
+          header h1 a {
+            display: inline-flex !important;
+          }
+          header h1 a > div {
+            width: 50px !important;
+            height: 50px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+          }
+
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div + div:last-child,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button) div[dir]:not([aria-live]),
+          [data-testid="SideNav_AccountSwitcher_Button"] > div:not(:first-child) {
+            display: none !important;
+          }
+
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div {
+            width: fit-content !important;
+            display: inline-flex !important;
+            align-items: center !important;
+          }
+
+          [data-testid="SideNav_AccountSwitcher_Button"] {
+            width: 50px !important;
+            height: 50px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
+            padding: 0 !important;
+            border-radius: 9999px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+          }
+
+          [data-testid="SideNav_NewTweet_Button"] {
+            width: 50px !important;
+            height: 50px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
+            max-width: 50px !important;
+            padding: 0 !important;
+            border-radius: 9999px !important;
+            margin: 8px 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] > div {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] span {
+            display: none !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] svg {
+            display: inline-block !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:not(:has(svg)) > div::before {
+            content: '' !important;
+            display: inline-block !important;
+            width: 22px !important;
+            height: 22px !important;
+            background-color: #ffffff !important;
+            -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
+            mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
+          }
+        }
+      `)
+      } else if (config.showLabels === 'hover') {
+        cssRules.push(`
+        @media only screen and (min-width: 1000px) {
+          /* Single vertical centerline alignment */
+          header h1 {
+            margin: 0 !important;
+          }
+          header h1 a {
+            display: inline-flex !important;
+          }
+          header h1 a > div {
+            width: 50px !important;
+            height: 50px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+          }
+
+          /* Compact icon-only default state */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div {
+            width: fit-content !important;
+            position: relative !important;
+            z-index: 10 !important;
+            overflow: visible !important;
+            display: inline-flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+          }
+
+          [data-testid="SideNav_AccountSwitcher_Button"] {
+            width: 50px !important;
+            height: 50px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
+            padding: 0 !important;
+            border-radius: 9999px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: relative !important;
+            z-index: 10 !important;
+            box-sizing: border-box !important;
+            transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+
+          [data-testid="SideNav_NewTweet_Button"] {
+            width: 50px !important;
+            height: 50px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
+            max-width: 50px !important;
+            padding: 0 !important;
+            border-radius: 9999px !important;
+            margin: 8px 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+            position: relative !important;
+            z-index: 10 !important;
+            transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] > div {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] span {
+            display: inline-flex !important;
+            opacity: 0 !important;
+            max-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            pointer-events: none !important;
+            transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] svg {
+            display: inline-block !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:not(:has(svg)) > div::before {
+            content: '' !important;
+            display: inline-block !important;
+            width: 22px !important;
+            height: 22px !important;
+            background-color: #ffffff !important;
+            -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
+            mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
+          }
+
+          /* Hide labels unhovered with smooth transition */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div + div:last-child,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button) div[dir]:not([aria-live]),
+          [data-testid="SideNav_AccountSwitcher_Button"] > div:not(:first-child) {
+            display: inline-flex !important;
+            opacity: 0 !important;
+            max-width: 0 !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            pointer-events: none !important;
+            transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+
+          /* Backdrop blur on hovered item pill */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:hover > div,
+          [data-testid="SideNav_AccountSwitcher_Button"]:hover {
+            backdrop-filter: blur(12px) !important;
+          }
+
+          /* Reveal label on hover for the hovered individual item */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:hover > div > div + div:last-child,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):hover div[dir]:not([aria-live]) {
+            opacity: 1 !important;
+            max-width: 250px !important;
+            margin-left: 16px !important;
+            margin-right: 4px !important;
+            pointer-events: auto !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:hover > div > div + div:last-child span,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):hover div[dir]:not([aria-live]) span {
+            overflow: visible !important;
+            text-overflow: clip !important;
+          }
+
+          /* Account switcher hover */
+          [data-testid="SideNav_AccountSwitcher_Button"]:hover {
+            width: fit-content !important;
+            max-width: 275px !important;
+            padding: 12px !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"]:hover > div:not(:first-child) {
+            opacity: 1 !important;
+            max-width: 250px !important;
+            margin-left: 12px !important;
+            margin-right: 4px !important;
+            pointer-events: auto !important;
+          }
+
+          /* Tweet button hover: expand, hide feather/svg icon, reveal text */
+          [data-testid="SideNav_NewTweet_Button"]:hover {
+            width: fit-content !important;
+            min-width: 110px !important;
+            max-width: 200px !important;
+            padding: 0 24px !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:hover:not(:has(svg)) > div::before {
+            display: none !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:hover svg {
+            display: none !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:hover span {
+            opacity: 1 !important;
+            max-width: 150px !important;
+            pointer-events: auto !important;
+            font-weight: 700 !important;
+            font-size: 15px !important;
+            color: #ffffff !important;
+          }
+        }
+      `)
       }
       if (config.hideChatNav) {
         hideCssSelectors.push(`${Selectors.PRIMARY_NAV_DESKTOP} a[href$="/i/chat"]`)
@@ -8598,6 +9142,7 @@ async function main() {
 
   $html = document.querySelector('html')
   $body = document.body
+  $body.classList.toggle('Search', isOnSearchPage())
   $reactRoot = document.querySelector('#react-root')
   lang = $html.lang
   dir = $html.dir
@@ -8626,6 +9171,7 @@ async function main() {
       checkReactNativeStylesheet()
       observeBodyBackgroundColor()
       observeReRenderBoundary()
+      setupCollapsibleSearch()
       patchHistory()
       let initialThemeColor = getThemeColorFromState()
       if (initialThemeColor) {
@@ -8763,6 +9309,9 @@ let $settings = /** @type {HTMLScriptElement} */ (document.querySelector('script
 if ($settings) {
   try {
     Object.assign(config, JSON.parse($settings.innerText))
+    if (config.collapsibleSearch === undefined && config.transparentSearch !== undefined) {
+      config.collapsibleSearch = config.transparentSearch
+    }
     if (config.downloadFilenameFormat) {
       config.downloadFilenameFormat = normalizeFilenameTemplate(config.downloadFilenameFormat)
     }
@@ -8788,6 +9337,9 @@ if ($settings) {
       return
     }
 
+    if (configChanges.collapsibleSearch === undefined && configChanges.transparentSearch !== undefined) {
+      configChanges.collapsibleSearch = configChanges.transparentSearch
+    }
     if (configChanges.downloadFilenameFormat) {
       configChanges.downloadFilenameFormat = normalizeFilenameTemplate(configChanges.downloadFilenameFormat)
     }

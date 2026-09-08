@@ -5472,15 +5472,45 @@ const configureCss = (() => {
       }
       if (config.removeTimelineBorders) {
         cssRules.push(`
-        ${Selectors.PRIMARY_COLUMN} {
+        ${Selectors.PRIMARY_COLUMN},
+        ${Selectors.PRIMARY_COLUMN} > div {
           border-left-width: 0 !important;
           border-right-width: 0 !important;
+          border-left: none !important;
+          border-right: none !important;
+          border-style: hidden !important;
         }
       `)
       }
       if (config.removeTweetBorders) {
         cssRules.push(`
+        [data-testid="cellInnerDiv"],
+        ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"] {
+          border-top: none !important;
+          border-bottom: none !important;
+          border-top-width: 0 !important;
+          border-bottom-width: 0 !important;
+        }
+        [data-testid="cellInnerDiv"] > div,
+        ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"] > div {
+          border-top: none !important;
+          border-bottom: none !important;
+          border-top-width: 0 !important;
+          border-bottom-width: 0 !important;
+        }
+        ${Selectors.PRIMARY_COLUMN} section [role="separator"],
+        ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"] [role="separator"],
+        ${Selectors.PRIMARY_COLUMN} [role="separator"],
+        div[role="separator"] {
+          display: none !important;
+        }
+        ${Selectors.PRIMARY_COLUMN} > div > div:empty {
+          background: transparent !important;
+        }
         ${Selectors.TWEET} {
+          border-top: none !important;
+          border-bottom: none !important;
+          border-top-width: 0 !important;
           border-bottom-width: 0 !important;
         }
       `)

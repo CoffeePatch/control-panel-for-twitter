@@ -4129,11 +4129,19 @@ function resolveTweetMedia($tweet) {
 
   // DOM Fallback for photos if API cache did not capture them
   if (resolved.length === 0) {
-    let $photos = $tweet.querySelectorAll('img[src*="pbs.twimg.com/media/"]')
+    let $context = $tweet || document
+    let $photos = Array.from($context.querySelectorAll?.('img[src*="pbs.twimg.com/media/"]') || [])
+    if ($photos.length === 0) {
+      let $modal = $tweet?.closest?.('[aria-modal="true"]') || document.querySelector('[aria-modal="true"], div[data-testid="swipe-to-dismiss"]')
+      if ($modal) {
+        $photos = Array.from($modal.querySelectorAll('img[src*="pbs.twimg.com/media/"]'))
+      }
+    }
     let seenUrls = new Set()
     for (let $img of $photos) {
       let src = /** @type {HTMLImageElement} */ ($img).src
       if (!src || seenUrls.has(src)) continue
+      if (src.includes('/profile_images/')) continue
       seenUrls.add(src)
       let origUrl = src
       if (origUrl.includes('?')) {
@@ -4148,6 +4156,18 @@ function resolveTweetMedia($tweet) {
         url: origUrl,
         type: 'image',
         ext,
+      })
+    }
+  }
+
+  // DOM Fallback for videos
+  if (resolved.length === 0) {
+    let $video = $tweet?.querySelector?.('video') || document.querySelector('[aria-modal="true"] video, div[data-testid="swipe-to-dismiss"] video')
+    if ($video && $video.src && $video.src.startsWith('http')) {
+      resolved.push({
+        url: $video.src,
+        type: 'video',
+        ext: 'mp4',
       })
     }
   }
@@ -4311,16 +4331,34 @@ function createLoadingSvg(className) {
   return svg
 }
 
-function addDownloadButton($tweet) {
+function addDownloadButton($tweetOrContainer) {
   if (!config.enabled) return
   if (!config.downloadMedia) return
-  if ($tweet.querySelector('.cpft_download_action')) return
+  if (!$tweetOrContainer) return
+  if ($tweetOrContainer.querySelector?.('.cpft_download_action')) return
 
-  let hasMedia = $tweet.querySelector('[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="videoComponent"], video')
-  if (!hasMedia) return
+  let isModal = Boolean(
+    $tweetOrContainer.closest?.('[aria-modal="true"]') ||
+    URL_MEDIA_RE.test(location.pathname) ||
+    location.pathname.includes('/photo/') ||
+    location.pathname.includes('/video/')
+  )
+  let isIndividualPage = Boolean(isOnIndividualTweetPage() || location.pathname.match(URL_TWEET_BASE_RE))
 
-  let $actionBar = $tweet.querySelector('[role="group"]')
+  let hasMedia = isModal || Boolean($tweetOrContainer.querySelector?.(
+    '[data-testid="tweetPhoto"], [data-testid="videoPlayer"], [data-testid="videoComponent"], video, ' +
+    'img[src*="pbs.twimg.com/media/"], img[src*="twimg.com/media/"], [data-testid="tweetMedia"], ' +
+    'a[href*="/photo/"], a[href*="/video/"]'
+  ))
+  if (!hasMedia && !isIndividualPage) return
+
+  let $actionBar = $tweetOrContainer.matches?.('[role="group"]') ? $tweetOrContainer : (
+    $tweetOrContainer.querySelector?.('[role="group"]:has([data-testid="reply"], [data-testid="retweet"], [data-testid="unretweet"], [data-testid="like"], [data-testid="unlike"], [data-testid="bookmark"], [aria-label*="Like" i], [aria-label*="Reply" i], [aria-label*="Share" i])') ||
+    $tweetOrContainer.querySelector?.('div:has(> [role="group"][id^="id__"]) [role="group"]') ||
+    $tweetOrContainer.querySelector?.('[role="group"]')
+  )
   if (!$actionBar) return
+  if ($actionBar.querySelector('.cpft_download_action')) return
 
   let $btnContainer = document.createElement('div')
   $btnContainer.className = 'cpft_download_action'
@@ -4351,7 +4389,7 @@ function addDownloadButton($tweet) {
     $btn.classList.add('cpft_loading')
 
     try {
-      let mediaItems = resolveTweetMedia($tweet)
+      let mediaItems = resolveTweetMedia($tweetOrContainer)
       if (!mediaItems || mediaItems.length === 0) {
         log('No downloadable media could be resolved for tweet')
         $btn.classList.remove('cpft_loading')
@@ -4365,7 +4403,7 @@ function addDownloadButton($tweet) {
         return
       }
 
-      let metadata = getTweetMetadata($tweet)
+      let metadata = getTweetMetadata($tweetOrContainer)
       for (let i = 0; i < mediaItems.length; i++) {
         let item = mediaItems[i]
         let itemMetadata = { ...metadata, type: item.type }
@@ -4400,6 +4438,39 @@ function addDownloadButton($tweet) {
 
   $btnContainer.appendChild($btn)
   $actionBar.appendChild($btnContainer)
+}
+
+function tweakMediaModal($modal) {
+  if (!config.enabled || !config.downloadMedia) return
+  if (!$modal) return
+
+  let processMediaModal = () => {
+    // 1. Process sidebar tweets inside modal
+    let $tweets = $modal.querySelectorAll(Selectors.TWEET)
+    for (let $tweet of $tweets) {
+      addDownloadButton($tweet)
+    }
+
+    // 2. Process photo/video viewer overlay action bar
+    let $actionBars = $modal.querySelectorAll('[role="group"]')
+    for (let $bar of $actionBars) {
+      if ($bar.querySelector('.cpft_download_action')) continue
+      let hasActions = $bar.querySelector(
+        '[data-testid="reply"], [data-testid="retweet"], [data-testid="unretweet"], ' +
+        '[data-testid="like"], [data-testid="unlike"], [data-testid="bookmark"], ' +
+        'button[aria-label*="Like" i], button[aria-label*="Reply" i], button[aria-label*="Share" i]'
+      )
+      if (hasActions) {
+        addDownloadButton($bar)
+      }
+    }
+  }
+
+  processMediaModal()
+  observeElement($modal, processMediaModal, {
+    name: 'media modal download observer',
+    observers: modalObservers,
+  })
 }
 //#endregion
 
@@ -4798,6 +4869,12 @@ const configureCss = (() => {
     }
     .cpft_download_button.cpft_error {
       color: rgb(244, 33, 46) !important;
+    }
+    [aria-modal="true"] > div [role="group"] .cpft_download_button {
+      color: rgb(255, 255, 255);
+    }
+    [aria-modal="true"] article[data-testid="tweet"] .cpft_download_button {
+      color: var(--cpft-text-secondary);
     }
     @keyframes cpft_spin {
       0% { transform: rotate(0deg); }
@@ -6939,12 +7016,17 @@ function handlePopup($popup) {
     }
   }
 
+  if (desktop && (URL_MEDIA_RE.test(location.pathname) || $popup.querySelector?.('[aria-modal="true"]') || $popup.getAttribute?.('aria-modal') === 'true')) {
+    tweakMediaModal($popup)
+  }
+
   if (desktop && !isDesktopMediaModalOpen &&
       URL_MEDIA_RE.test(location.pathname) &&
       currentPath != location.pathname) {
     log('media modal opened')
     isDesktopMediaModalOpen = true
     observeDesktopModalTimeline($popup)
+    tweakMediaModal($popup)
     return {
       tookAction: true,
       onPopupClosed() {
@@ -8011,6 +8093,18 @@ function processCurrentPage() {
     tweakPremiumSignUpPage()
   }
 
+  if (desktop && URL_MEDIA_RE.test(location.pathname)) {
+    (async () => {
+      let $modal = await getElement('#layers [aria-modal="true"], #layers [data-testid="swipe-to-dismiss"], #layers', {
+        name: 'desktop media modal on page load',
+        timeout: 5000,
+      })
+      if ($modal) {
+        tweakMediaModal($modal)
+      }
+    })()
+  }
+
   // On mobile, these are pages instead of modals
   if (mobile) {
     if (isOnComposeTweetPage()) {
@@ -8525,6 +8619,24 @@ async function tweakFollowListPage() {
 async function tweakIndividualTweetPage() {
   userSortedReplies = false
   observeIndividualTweetTimeline(currentPage)
+
+  let $primaryColumn = await getElement(Selectors.PRIMARY_COLUMN, {
+    name: 'primary column for focused tweet download',
+    stopIf: pageIsNot(currentPage),
+  })
+  if ($primaryColumn) {
+    let processColumnTweets = () => {
+      let $tweets = $primaryColumn.querySelectorAll(Selectors.TWEET)
+      for (let $tweet of $tweets) {
+        addDownloadButton($tweet)
+      }
+    }
+    processColumnTweets()
+    observeElement($primaryColumn, processColumnTweets, {
+      name: 'primary column tweet observer',
+      observers: pageObservers,
+    })
+  }
 
   if (config.replaceLogo) {
     (async () => {

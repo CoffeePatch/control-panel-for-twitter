@@ -158,7 +158,7 @@ const config = {
   downloadVideoQuality: 'highest',
   // Timeline / Layout
   timelineWidth: 'default',
-  timelineAlignment: 'center',
+  timelineAlignment: 'default',
   showLabels: 'always',
   centerNavigation: false,
   removeTimelineBorders: false,
@@ -3698,8 +3698,7 @@ function setupCollapsibleSearch() {
   collapsibleSearchInitialized = true
 
   document.addEventListener('focusin', (e) => {
-    let shouldReclaim = config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment
-    if (!desktop || !shouldReclaim || isOnSearchPage()) return
+    if (!desktop || !config.collapsibleSearch || isOnSearchPage()) return
     let $target = /** @type {HTMLElement} */ (e.target)
     let $form = $target?.closest('form[role="search"]')
     if ($form) {
@@ -3708,8 +3707,7 @@ function setupCollapsibleSearch() {
   })
 
   document.addEventListener('focusout', (e) => {
-    let shouldReclaim = config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment
-    if (!desktop || !shouldReclaim || isOnSearchPage()) return
+    if (!desktop || !config.collapsibleSearch || isOnSearchPage()) return
     let $related = /** @type {HTMLElement} */ (e.relatedTarget)
     let $form = /** @type {HTMLElement} */ (e.target)?.closest('form[role="search"]')
     if ($form && (!$related || !$related.closest('form[role="search"]'))) {
@@ -3718,11 +3716,13 @@ function setupCollapsibleSearch() {
   })
 
   document.addEventListener('click', (e) => {
-    let shouldReclaim = config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment
-    if (!desktop || !shouldReclaim || isOnSearchPage()) return
+    if (!desktop || !config.collapsibleSearch || isOnSearchPage()) return
     let $target = /** @type {HTMLElement} */ (e.target)
     let $form = $target?.closest('form[role="search"]')
     if ($form) {
+      if ($target.closest('button, [role="button"], [role="option"], [role="listbox"], a')) {
+        return
+      }
       let $input = $form.querySelector('input[role="combobox"]')
       if ($input && document.activeElement !== $input) {
         /** @type {HTMLElement} */ ($input).focus()
@@ -5549,44 +5549,25 @@ const configureCss = (() => {
         cssRules.push(`
         ${Selectors.PRIMARY_COLUMN},
         ${Selectors.PRIMARY_COLUMN} > div {
-          border-left-width: 0 !important;
-          border-right-width: 0 !important;
           border-left: none !important;
           border-right: none !important;
-          border-style: hidden !important;
         }
       `)
       }
       if (config.removeTweetBorders) {
         cssRules.push(`
-        [data-testid="cellInnerDiv"],
-        ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"] {
+        ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"],
+        ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"] > div,
+        ${Selectors.TWEET} {
           border-top: none !important;
           border-bottom: none !important;
-          border-top-width: 0 !important;
-          border-bottom-width: 0 !important;
         }
-        [data-testid="cellInnerDiv"] > div,
-        ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"] > div {
-          border-top: none !important;
-          border-bottom: none !important;
-          border-top-width: 0 !important;
-          border-bottom-width: 0 !important;
-        }
-        ${Selectors.PRIMARY_COLUMN} section [role="separator"],
         ${Selectors.PRIMARY_COLUMN} [data-testid="cellInnerDiv"] [role="separator"],
-        ${Selectors.PRIMARY_COLUMN} [role="separator"],
-        div[role="separator"] {
+        ${Selectors.PRIMARY_COLUMN} section [data-testid="cellInnerDiv"] [role="separator"] {
           display: none !important;
         }
         ${Selectors.PRIMARY_COLUMN} > div > div:empty {
           background: transparent !important;
-        }
-        ${Selectors.TWEET} {
-          border-top: none !important;
-          border-bottom: none !important;
-          border-top-width: 0 !important;
-          border-bottom-width: 0 !important;
         }
       `)
       }
@@ -5594,21 +5575,20 @@ const configureCss = (() => {
         cssRules.push(`
         div[data-testid="TopNavBar"],
         ${Selectors.DESKTOP_TIMELINE_HEADER} {
-          display: none !important;
+          position: static !important;
+          top: unset !important;
         }
       `)
       }
       let isFullWidth = config.timelineWidth === 'full' || (config.timelineWidth === 'default' && config.fullWidthContent)
-      let shouldReclaimSidebar = Boolean(config.collapsibleSearch || (config.timelineWidth && config.timelineWidth !== 'default') || config.timelineAlignment)
-      let alignment = config.timelineAlignment || 'center'
+      let shouldReclaimSidebar = Boolean(config.collapsibleSearch)
+      let alignment = config.timelineAlignment || 'default'
       let alignRules = ''
       if (alignment === 'left') {
         let leftMargin = (config.showLabels === 'always' && shouldReclaimSidebar) ? '285px' : '100px'
         alignRules = `
           body:not(.Search) main[role="main"] {
             align-items: flex-start !important;
-            overflow-x: clip;
-            overflow: visible !important;
           }
           body:not(.Search) ${Selectors.PRIMARY_COLUMN} {
             margin-left: ${leftMargin} !important;
@@ -5616,23 +5596,20 @@ const configureCss = (() => {
           }
         `
       } else if (alignment === 'right') {
+        let rightMargin = config.collapsibleSearch ? '180px' : '16px'
         alignRules = `
           body:not(.Search) main[role="main"] {
             align-items: flex-end !important;
-            overflow: visible !important;
           }
           body:not(.Search) ${Selectors.PRIMARY_COLUMN} {
             margin-left: auto !important;
-            margin-right: 16px !important;
+            margin-right: ${rightMargin} !important;
           }
         `
-      } else {
-        // Default center alignment
+      } else if (alignment === 'center') {
         alignRules = `
           body:not(.Search) main[role="main"] {
             align-items: center !important;
-            overflow-x: clip;
-            overflow: visible !important;
           }
           body:not(.Search) ${Selectors.PRIMARY_COLUMN} {
             margin: 0 auto !important;
@@ -5747,7 +5724,7 @@ const configureCss = (() => {
           }
         `)
         }
-      } else {
+      } else if (alignment !== 'default') {
         // Default timeline width with user-controlled alignment
         cssRules.push(`
         @media only screen and (min-width: 1000px) {
@@ -5789,7 +5766,6 @@ const configureCss = (() => {
             top: 12px;
             right: 16px;
             width: auto;
-            z-index: 99;
             z-index: 9999 !important;
           }
           body:not(.Search) ${Selectors.SIDEBAR} form[role="search"] input[role="combobox"] {
@@ -5805,7 +5781,6 @@ const configureCss = (() => {
           body:not(.Search) ${Selectors.SIDEBAR} form[role="search"]:is(:focus-within, .SearchExpanded) input[role="combobox"] {
             width: 100% !important;
           }
-          body:not(.Search) ${Selectors.SIDEBAR} div[style*="left: -12px"],
           body:not(.Search) ${Selectors.SIDEBAR} div[style*="left: -12px"] {
             left: unset !important;
           }
@@ -5849,13 +5824,16 @@ const configureCss = (() => {
       }
       if (config.centerNavigation) {
         cssRules.push(`
-        header[role="banner"] > div > div > div {
-          justify-content: center !important;
-          padding-top: 0 !important;
+        @media only screen and (min-height: 700px) {
+          header[role="banner"] > div > div > div {
+            justify-content: safe center !important;
+            padding-top: 0 !important;
+          }
         }
       `)
       }
       if (shouldReclaimSidebar || config.showLabels !== 'always') {
+        let navPadding = (config.showLabels === 'always' && shouldReclaimSidebar) ? '275px' : '88px'
         cssRules.push(`
         @media only screen and (min-width: 1000px) {
           header[role="banner"] {
@@ -5879,10 +5857,8 @@ const configureCss = (() => {
           header[role="banner"] [role="button"] {
             pointer-events: auto !important;
           }
-        }
-        @media only screen and (min-width: 1000px) and (max-width: 1264px) {
           body {
-            padding-left: 88px !important;
+            padding-left: ${navPadding} !important;
             box-sizing: border-box !important;
           }
         }
@@ -5964,7 +5940,7 @@ const configureCss = (() => {
             display: inline-block !important;
             width: 22px !important;
             height: 22px !important;
-            background-color: #ffffff !important;
+            background-color: currentColor !important;
             -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
             mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
           }
@@ -6059,7 +6035,7 @@ const configureCss = (() => {
             display: inline-block !important;
             width: 22px !important;
             height: 22px !important;
-            background-color: #ffffff !important;
+            background-color: currentColor !important;
             -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
             mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
           }
@@ -6080,34 +6056,34 @@ const configureCss = (() => {
             transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
           }
 
-          /* Backdrop blur on hovered item pill */
-          ${Selectors.PRIMARY_NAV_DESKTOP} > *:hover > div,
-          [data-testid="SideNav_AccountSwitcher_Button"]:hover {
+          /* Backdrop blur on hovered/focused item pill */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div,
+          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) {
             backdrop-filter: blur(12px) !important;
           }
 
-          /* Reveal label on hover for the hovered individual item */
-          ${Selectors.PRIMARY_NAV_DESKTOP} > *:hover > div > div + div:last-child,
-          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):hover div[dir]:not([aria-live]) {
+          /* Reveal label on hover/focus for the hovered/focused individual item */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div > div + div:last-child,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):is(:hover, :focus-visible, :focus-within) div[dir]:not([aria-live]) {
             opacity: 1 !important;
             max-width: 250px !important;
             margin-left: 16px !important;
             margin-right: 4px !important;
             pointer-events: auto !important;
           }
-          ${Selectors.PRIMARY_NAV_DESKTOP} > *:hover > div > div + div:last-child span,
-          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):hover div[dir]:not([aria-live]) span {
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div > div + div:last-child span,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):is(:hover, :focus-visible, :focus-within) div[dir]:not([aria-live]) span {
             overflow: visible !important;
             text-overflow: clip !important;
           }
 
-          /* Account switcher hover */
-          [data-testid="SideNav_AccountSwitcher_Button"]:hover {
+          /* Account switcher hover/focus */
+          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) {
             width: fit-content !important;
             max-width: 275px !important;
             padding: 12px !important;
           }
-          [data-testid="SideNav_AccountSwitcher_Button"]:hover > div:not(:first-child) {
+          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) > div:not(:first-child) {
             opacity: 1 !important;
             max-width: 250px !important;
             margin-left: 12px !important;
@@ -6115,26 +6091,26 @@ const configureCss = (() => {
             pointer-events: auto !important;
           }
 
-          /* Tweet button hover: expand, hide feather/svg icon, reveal text */
-          [data-testid="SideNav_NewTweet_Button"]:hover {
+          /* Tweet button hover/focus: expand, hide feather/svg icon, reveal text */
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) {
             width: fit-content !important;
             min-width: 110px !important;
             max-width: 200px !important;
             padding: 0 24px !important;
           }
-          [data-testid="SideNav_NewTweet_Button"]:hover:not(:has(svg)) > div::before {
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within):not(:has(svg)) > div::before {
             display: none !important;
           }
-          [data-testid="SideNav_NewTweet_Button"]:hover svg {
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) svg {
             display: none !important;
           }
-          [data-testid="SideNav_NewTweet_Button"]:hover span {
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) span {
             opacity: 1 !important;
             max-width: 150px !important;
             pointer-events: auto !important;
             font-weight: 700 !important;
             font-size: 15px !important;
-            color: #ffffff !important;
+            color: inherit !important;
           }
         }
       `)
@@ -9451,9 +9427,6 @@ let $settings = /** @type {HTMLScriptElement} */ (document.querySelector('script
 if ($settings) {
   try {
     Object.assign(config, JSON.parse($settings.innerText))
-    if (config.collapsibleSearch === undefined && config.transparentSearch !== undefined) {
-      config.collapsibleSearch = config.transparentSearch
-    }
     if (config.downloadFilenameFormat) {
       config.downloadFilenameFormat = normalizeFilenameTemplate(config.downloadFilenameFormat)
     }
@@ -9479,9 +9452,6 @@ if ($settings) {
       return
     }
 
-    if (configChanges.collapsibleSearch === undefined && configChanges.transparentSearch !== undefined) {
-      configChanges.collapsibleSearch = configChanges.transparentSearch
-    }
     if (configChanges.downloadFilenameFormat) {
       configChanges.downloadFilenameFormat = normalizeFilenameTemplate(configChanges.downloadFilenameFormat)
     }

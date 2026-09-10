@@ -259,7 +259,7 @@ const defaultConfig = {
   downloadVideoQuality: 'highest',
   // Timeline / Layout
   timelineWidth: 'default',
-  timelineAlignment: 'center',
+  timelineAlignment: 'default',
   showLabels: 'always',
   removeTimelineBorders: false,
   removeTweetBorders: false,
@@ -864,11 +864,8 @@ function main() {
     if (storedConfig.fullWidthContent && !storedConfig.timelineWidth) {
       storedConfig.timelineWidth = 'full'
     }
-    if (storedConfig.collapsibleSearch === undefined && storedConfig.transparentSearch !== undefined) {
-      storedConfig.collapsibleSearch = storedConfig.transparentSearch
-    }
     if (!storedConfig.timelineAlignment) {
-      storedConfig.timelineAlignment = 'center'
+      storedConfig.timelineAlignment = 'default'
     }
     if (!storedConfig.showLabels) {
       storedConfig.showLabels = 'always'

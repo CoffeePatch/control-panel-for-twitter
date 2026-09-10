@@ -21,7 +21,7 @@ export type Config = {
   downloadVideoQuality: 'highest' | 'lowest'
   // Timeline / Layout
   timelineWidth: 'default' | '650' | '700' | '750' | '800' | 'full'
-  timelineAlignment: 'left' | 'center' | 'right'
+  timelineAlignment: 'default' | 'left' | 'center' | 'right'
   showLabels: 'always' | 'hover' | 'never'
   removeTimelineBorders: boolean
   removeTweetBorders: boolean

@@ -2319,6 +2319,7 @@ const Selectors = {
 
 /** @enum {string} */
 const Svgs = {
+  SEARCH_PATH: 'M10.25 3.75c-3.59 0-6.5 2.91-6.5 6.5s2.91 6.5 6.5 6.5c1.795 0 3.419-.726 4.596-1.904 1.178-1.177 1.904-2.801 1.904-4.596 0-3.59-2.91-6.5-6.5-6.5zm-8.5 6.5c0-4.694 3.806-8.5 8.5-8.5s8.5 3.806 8.5 8.5c0 1.986-.682 3.815-1.824 5.262l4.781 4.781-1.414 1.414-4.781-4.781c-1.447 1.142-3.276 1.824-5.262 1.824-4.694 0-8.5-3.806-8.5-8.5z',
   DOWNLOAD_PATH: 'M12 2.5a.75.75 0 0 1 .75.75v10.19l3.72-3.72a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-5-5a.75.75 0 1 1 1.06-1.06l3.72 3.72V3.25A.75.75 0 0 1 12 2.5ZM3.75 18a.75.75 0 0 1 .75.75v1.5c0 .414.336.75.75.75h13.5a.75.75 0 0 1 .75-.75v-1.5a.75.75 0 0 1 1.5 0v1.5A2.25 2.25 0 0 1 18.75 22H5.25A2.25 2.25 0 0 1 3 19.75v-1.5a.75.75 0 0 1 .75-.75Z',
   BLUE_LOGO_PATH: 'M16.5 3H2v18h15c3.038 0 5.5-2.46 5.5-5.5 0-1.4-.524-2.68-1.385-3.65-.08-.09-.089-.22-.023-.32.574-.87.908-1.91.908-3.03C22 5.46 19.538 3 16.5 3zm-.796 5.99c.457-.05.892-.17 1.296-.35-.302.45-.684.84-1.125 1.15.004.1.006.19.006.29 0 2.94-2.269 6.32-6.421 6.32-1.274 0-2.46-.37-3.459-1 .177.02.357.03.539.03 1.057 0 2.03-.35 2.803-.95-.988-.02-1.821-.66-2.109-1.54.138.03.28.04.425.04.206 0 .405-.03.595-.08-1.033-.2-1.811-1.1-1.811-2.18v-.03c.305.17.652.27 1.023.28-.606-.4-1.004-1.08-1.004-1.85 0-.4.111-.78.305-1.11 1.113 1.34 2.775 2.22 4.652 2.32-.038-.17-.058-.33-.058-.51 0-1.23 1.01-2.22 2.256-2.22.649 0 1.235.27 1.647.7.514-.1.997-.28 1.433-.54-.168.52-.526.96-.992 1.23z',
   MUTE: '<g><path d="M18 6.59V1.2L8.71 7H5.5C4.12 7 3 8.12 3 9.5v5C3 15.88 4.12 17 5.5 17h2.09l-2.3 2.29 1.42 1.42 15.5-15.5-1.42-1.42L18 6.59zm-8 8V8.55l6-3.75v3.79l-6 6zM5 9.5c0-.28.22-.5.5-.5H8v6H5.5c-.28 0-.5-.22-.5-.5v-5zm6.5 9.24l1.45-1.45L16 19.2V14l2 .02v8.78l-6.5-4.06z"></path></g>',
@@ -4808,6 +4809,44 @@ const configureCss = (() => {
           background-color: var(--cpft-hover-bg) !important;
         }
       }
+    .cpft_universal_search_action {
+      display: flex !important;
+      align-items: center !important;
+      margin-inline-start: auto !important;
+      margin-inline-end: 8px !important;
+      flex-shrink: 0 !important;
+    }
+    .cpft_universal_search_btn {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 34px !important;
+      height: 34px !important;
+      min-width: 34px !important;
+      border-radius: 9999px !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      cursor: pointer !important;
+      outline: none !important;
+      border: 1px solid rgba(29, 155, 240, 0.45) !important;
+      background-color: rgba(29, 155, 240, 0.08) !important;
+      color: rgb(29, 155, 240) !important;
+      transition: background-color 0.2s, border-color 0.2s, transform 0.15s !important;
+    }
+    .cpft_universal_search_btn:hover {
+      background-color: rgba(29, 155, 240, 0.18) !important;
+      border-color: rgb(29, 155, 240) !important;
+      transform: scale(1.05) !important;
+    }
+    .cpft_universal_search_btn:focus-visible {
+      outline: 2px solid rgb(29, 155, 240) !important;
+      outline-offset: 2px !important;
+    }
+    .cpft_universal_search_icon {
+      width: 17px !important;
+      height: 17px !important;
+      fill: currentColor !important;
+    }
     .cpft_download_action {
       display: flex;
       align-items: center;
@@ -5680,6 +5719,28 @@ const configureCss = (() => {
           body:not(.Search) ${Selectors.PRIMARY_COLUMN} > div > div,
           body:not(.Search) ${Selectors.PRIMARY_COLUMN} > div > div div:not([data-testid="dm-message-list-container"] *) {
             max-width: unset !important;
+          }
+          /* Hide floating search capsule on profile pages in full-width mode when not active */
+          body.Profile:not(.Search) ${Selectors.SIDEBAR} form[role="search"]:not(:focus-within, .SearchExpanded) {
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+          }
+          /* Expanded search flyout on profile pages in full-width mode */
+          body.Profile:not(.Search) ${Selectors.SIDEBAR} form[role="search"]:is(:focus-within, .SearchExpanded) {
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            position: fixed !important;
+            top: 8px !important;
+            right: 16px !important;
+            width: 374px !important;
+            max-width: calc(100vw - 32px) !important;
+            backdrop-filter: blur(12px) !important;
+            z-index: 99999 !important;
           }
         }
         @media only screen and (min-width: 1265px) {
@@ -9072,12 +9133,107 @@ async function tweakPremiumSignUpPage() {
   }
 }
 
+async function setupProfileHeaderSearch() {
+  let isFullWidth = config.timelineWidth === 'full' || (config.timelineWidth === 'default' && config.fullWidthContent)
+  if (!isFullWidth || !desktop) return
+
+  let $header = await getElement(Selectors.DESKTOP_TIMELINE_HEADER, {
+    name: 'desktop profile timeline header',
+    stopIf: pageIsNot(currentPage),
+    timeout: 3000,
+  })
+  if (!$header) return
+
+  function ensureSearchButton() {
+    let isFullWidthNow = config.timelineWidth === 'full' || (config.timelineWidth === 'default' && config.fullWidthContent)
+    if (!isFullWidthNow || !desktop) {
+      $header.querySelectorAll('.cpft_universal_search_action').forEach(el => el.remove())
+      return
+    }
+
+    let $headerInner = $header.firstElementChild || $header
+    if (!$headerInner) return
+
+    let $searchAction = /** @type {HTMLElement} */ ($headerInner.querySelector('.cpft_universal_search_action'))
+    if (!$searchAction) {
+      $searchAction = document.createElement('div')
+      $searchAction.className = 'cpft_universal_search_action'
+
+      let $btn = document.createElement('button')
+      $btn.type = 'button'
+      $btn.className = 'cpft_universal_search_btn'
+      $btn.setAttribute('aria-label', 'Search')
+      $btn.setAttribute('title', 'Search X (Universal Search)')
+
+      $btn.appendChild(createSvgIcon(Svgs.SEARCH_PATH, 'cpft_universal_search_icon'))
+
+      $btn.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        let $searchForm = /** @type {HTMLElement} */ (
+          document.querySelector(`${Selectors.SIDEBAR} form[role="search"]`) ||
+          document.querySelector('form[role="search"]')
+        )
+        if ($searchForm) {
+          let $input = /** @type {HTMLElement} */ ($searchForm.querySelector('input[role="combobox"]'))
+          if ($searchForm.classList.contains('SearchExpanded') && document.activeElement === $input) {
+            $input.blur()
+            $searchForm.classList.remove('SearchExpanded')
+          } else {
+            $searchForm.classList.add('SearchExpanded')
+            if ($input) {
+              $input.focus()
+            }
+          }
+        }
+      })
+
+      $searchAction.appendChild($btn)
+    }
+
+    // Find Twitter's action container (Follow button, More button, etc.)
+    let $actionContainer = null
+    for (let $child of $headerInner.children) {
+      if ($child === $searchAction) continue
+      if ($child.querySelector('h2')) continue
+      if ($child.querySelector('button, [role="button"], a')) {
+        $actionContainer = $child
+        break
+      }
+    }
+
+    if ($actionContainer) {
+      if ($searchAction.nextElementSibling !== $actionContainer) {
+        $headerInner.insertBefore($searchAction, $actionContainer)
+      }
+    } else if ($searchAction.parentElement !== $headerInner || $searchAction !== $headerInner.lastElementChild) {
+      $headerInner.appendChild($searchAction)
+    }
+  }
+
+  ensureSearchButton()
+
+  observeElement($header, () => {
+    ensureSearchButton()
+  }, {
+    name: 'profile header search',
+    observers: pageObservers,
+  }, {
+    childList: true,
+    subtree: true,
+  })
+}
+
 async function tweakProfilePage() {
   let $initialContent = await getElement(desktop ? Selectors.PRIMARY_COLUMN : Selectors.MOBILE_TIMELINE_HEADER, {
     name: 'initial profile content',
     stopIf: pageIsNot(currentPage),
   })
   if (!$initialContent) return
+
+  if (desktop) {
+    setupProfileHeaderSearch()
+  }
 
   if (config.twitterBlueChecks != 'ignore') {
     processBlueChecks($initialContent)
@@ -9390,6 +9546,7 @@ function configChanged(changes) {
       document.querySelector('#cpftSeparatedTweetsTab')?.remove()
       document.querySelectorAll('.cpft_menu_item').forEach(el => el.remove())
       document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
+      document.querySelectorAll('.cpft_universal_search_action').forEach(el => el.remove())
       disconnectObservers(modalObservers, 'modal')
       disconnectObservers(pageObservers, 'page')
       disconnectObservers(globalObservers, 'global')
@@ -9418,6 +9575,14 @@ function configChanged(changes) {
   }
   if ('downloadMedia' in changes && !changes.downloadMedia) {
     document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
+  }
+  if ('timelineWidth' in changes || 'fullWidthContent' in changes) {
+    let isFullWidthNow = config.timelineWidth === 'full' || (config.timelineWidth === 'default' && config.fullWidthContent)
+    if (!isFullWidthNow) {
+      document.querySelectorAll('.cpft_universal_search_action').forEach(el => el.remove())
+    } else if (isOnProfilePage()) {
+      setupProfileHeaderSearch()
+    }
   }
   // Store the current notification count if hiding notifications was enabled
   if ('hideNotifications' in changes && config.hideNotifications != 'ignore') {

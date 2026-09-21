@@ -8,12 +8,15 @@ export type Config = {
   addFocusedTweetAccountLocation: boolean
   // XXX This is now more like "use the Following tab by default"
   alwaysUseLatestTweets: boolean
+  autoExpandCaptions: boolean
   bypassAgeVerification: boolean
   darkModeTheme: 'lightsOut' | 'dim'
   defaultToLatestSearch: boolean
   disableHomeTimeline: boolean
   disabledHomeTimelineRedirect: 'notifications' | 'messages'
   disableTweetTextFormatting: boolean
+  mediaView: 'default' | 'grid' | 'carousel'
+  horizontalMediaCarousel: boolean
   // Downloads
   downloadMedia: boolean
   downloadFilenameFormat: string

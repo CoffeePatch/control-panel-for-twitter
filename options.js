@@ -55,6 +55,7 @@ for (let translationId of [
   'addUserHoverCardAccountLocationLabel',
   'addFocusedTweetAccountLocationLabel',
   'alwaysUseLatestTweetsLabel',
+  'autoExpandCaptionsLabel',
   'bypassAgeVerificationLabel',
   'centerNavigationLabel',
   'customCssLabel',
@@ -87,6 +88,8 @@ for (let translationId of [
   'enabled',
   'experimentsOptionsLabel',
   'exportConfigLabel',
+  'exportSettingsButton',
+  'exportSettingsLabel',
   'fastBlockLabel',
   'followButtonStyleLabel',
   'followButtonStyleOption_monochrome',
@@ -146,6 +149,8 @@ for (let translationId of [
   'hideWhatsHappeningLabel',
   'hideWhoToFollowEtcLabel',
   'homeTimelineOptionsLabel',
+  'importSettingsButton',
+  'importSettingsLabel',
   'listRetweetsLabel',
   'mutableQuoteTweetsLabel',
   'navBaseFontSizeLabel',
@@ -167,6 +172,8 @@ for (let translationId of [
   'retweetsLabel',
   'revertMediaCarouselLabel',
   'revertProfileTabsLabel',
+  'searchOptionsLabel',
+  'settingsOptionsLabel',
   'showBlueReplyFollowersCountAmountLabel',
   'showBookmarkButtonUnderFocusedTweetsLabel',
   'showPremiumReplyBusinessLabel',
@@ -179,6 +186,11 @@ for (let translationId of [
   'sortRepliesLabel',
   'timelineAlignmentLabel',
   'timelineWidthLabel',
+  'mediaViewLabel',
+  'mediaViewInfo',
+  'mediaViewDefaultOption',
+  'mediaViewGridOption',
+  'mediaViewCarouselOption',
   'showLabelsLabel',
   'collapsibleSearchLabel',
   'tweakNewLayoutInfo',
@@ -246,6 +258,7 @@ const defaultConfig = {
   addAddMutedWordMenuItem: true,
   addFocusedTweetAccountLocation: false,
   alwaysUseLatestTweets: true,
+  autoExpandCaptions: false,
   bypassAgeVerification: true,
   darkModeTheme: 'lightsOut',
   defaultToLatestSearch: false,
@@ -327,6 +340,8 @@ const defaultConfig = {
   restoreTweetSource: true,
   retweets: 'separate',
   revertMediaCarousel: true,
+  mediaView: 'carousel',
+  horizontalMediaCarousel: true,
   revertProfileTabs: false,
   showBlueReplyFollowersCount: false,
   showBlueReplyFollowersCountAmount: '1000000',
@@ -386,10 +401,13 @@ let checkboxGroups
 // Page elements
 let $experiments = /** @type {HTMLDetailsElement} */ (document.querySelector('details#experiments'))
 let $exportConfig = document.querySelector('#export-config')
+let $exportSettingsButton = /** @type {HTMLButtonElement} */ (document.querySelector('#exportSettingsButton'))
 let $form = document.querySelector('form')
 let $hideQuotesFrom =  /** @type {HTMLDivElement} */ (document.querySelector('#hideQuotesFrom'))
 let $hideQuotesFromDetails = /** @type {HTMLDetailsElement} */ (document.querySelector('details#hideQuotesFromDetails'))
 let $hideQuotesFromLabel = /** @type {HTMLElement} */ (document.querySelector('#hideQuotesFromLabel'))
+let $importSettingsButton = /** @type {HTMLButtonElement} */ (document.querySelector('#importSettingsButton'))
+let $importSettingsInput = /** @type {HTMLInputElement} */ (document.querySelector('#importSettingsInput'))
 let $mutedQuotes =  /** @type {HTMLDivElement} */ (document.querySelector('#mutedQuotes'))
 let $mutedQuotesDetails =  /** @type {HTMLDetailsElement} */ (document.querySelector('details#mutedQuotesDetails'))
 let $mutedQuotesLabel = /** @type {HTMLElement} */ (document.querySelector('#mutedQuotesLabel'))
@@ -504,6 +522,12 @@ function onFormChanged(e) {
     if ($el.name == 'timelineWidth') {
       let isFull = $el.value == 'full'
       optionsConfig.fullWidthContent = changedConfig.fullWidthContent = isFull
+    }
+    if ($el.name == 'mediaView') {
+      let isCarousel = $el.value == 'carousel'
+      let isGrid = $el.value == 'grid'
+      optionsConfig.horizontalMediaCarousel = changedConfig.horizontalMediaCarousel = isCarousel
+      optionsConfig.revertMediaCarousel = changedConfig.revertMediaCarousel = isGrid || isCarousel
     }
   }
 
@@ -851,6 +875,383 @@ function setupFilenameFormatControls() {
     })
   }
 }
+
+function setupOptionsSearch() {
+  let $searchInput = /** @type {HTMLInputElement} */ (document.getElementById('optionsSearchInput'))
+  let $clearBtn = /** @type {HTMLButtonElement} */ (document.getElementById('clearOptionsSearch'))
+  let $noMatches = document.getElementById('noSearchMatches')
+  let $experiments = /** @type {HTMLDetailsElement} */ (document.getElementById('experiments'))
+  if (!$searchInput) return
+
+  let wasExperimentsOpen = $experiments ? $experiments.open : false
+
+  // Localized placeholder and no matches label
+  let placeholderText = chrome.i18n.getMessage('searchOptionsPlaceholder')
+  if (placeholderText) {
+    $searchInput.placeholder = placeholderText
+  }
+  let noMatchesLabel = document.getElementById('noMatchingOptionsLabel')
+  let noMatchesText = chrome.i18n.getMessage('noMatchingOptions')
+  if (noMatchesLabel && noMatchesText) {
+    noMatchesLabel.textContent = noMatchesText
+  }
+
+  // All setting groups (excluding Enabled toggle and Search bar)
+  let $allGroups = Array.from(document.querySelectorAll('form > section.group.labelled, form > section:has(#experiments)'))
+  if ($allGroups.length === 0) {
+    $allGroups = Array.from(document.querySelectorAll('form > section:not(:first-of-type):not(.options-search-container)'))
+  }
+
+  function getDirectText($el) {
+    let text = ''
+    let directNodes = Array.from($el.querySelectorAll('label, p, summary, span, button'))
+      .filter(child => child.closest('section:not(.group)') === $el)
+    for (let node of directNodes) {
+      text += ' ' + node.textContent
+    }
+    let directSelects = Array.from($el.querySelectorAll('select'))
+      .filter(child => child.closest('section:not(.group)') === $el)
+    for (let sel of directSelects) {
+      for (let opt of sel.options) {
+        text += ' ' + opt.textContent
+      }
+    }
+    let directInputs = Array.from($el.querySelectorAll('input, select, textarea'))
+      .filter(child => child.closest('section:not(.group)') === $el)
+    for (let inp of directInputs) {
+      if (inp.name) text += ' ' + inp.name
+      if (inp.placeholder) text += ' ' + inp.placeholder
+      if (inp.value && inp.type === 'button') text += ' ' + inp.value
+    }
+    return text.toLowerCase()
+  }
+
+  function performSearch() {
+    let query = $searchInput.value.trim().toLowerCase()
+    let words = query.split(/\s+/).filter(Boolean)
+
+    if (words.length === 0) {
+      if ($clearBtn) $clearBtn.style.display = 'none'
+      if ($noMatches) $noMatches.style.display = 'none'
+      document.body.classList.remove('is-searching')
+
+      for (let $group of $allGroups) {
+        $group.classList.remove('search-hidden')
+        for (let $s of $group.querySelectorAll('section')) {
+          $s.classList.remove('search-hidden')
+          $s.classList.remove('search-matched-item')
+        }
+      }
+      if ($experiments) {
+        $experiments.open = wasExperimentsOpen || Boolean(optionsConfig.customCss)
+      }
+      return
+    }
+
+    if ($clearBtn) $clearBtn.style.display = 'inline-block'
+    document.body.classList.add('is-searching')
+
+    let totalMatchingOptions = 0
+
+    for (let $group of $allGroups) {
+      let $groupHeader = $group.querySelector(':scope > label, :scope > details > summary')
+      let groupTitle = ($groupHeader?.textContent || '').toLowerCase()
+      let groupMatchesAll = words.every(w => groupTitle.includes(w))
+
+      let $settingSections = Array.from($group.querySelectorAll('section:not(.group)'))
+      let groupHasMatches = false
+
+      if (groupMatchesAll) {
+        groupHasMatches = true
+        totalMatchingOptions += Math.max(1, $settingSections.length)
+        $group.classList.remove('search-hidden')
+        for (let $sec of $settingSections) {
+          $sec.classList.remove('search-hidden')
+          $sec.classList.add('search-matched-item')
+        }
+      } else {
+        let sectionMatchMap = new Map()
+
+        for (let $sec of $settingSections) {
+          let directText = getDirectText($sec)
+          let combinedText = groupTitle + ' ' + directText
+          let isMatch = words.every(w => combinedText.includes(w))
+          sectionMatchMap.set($sec, isMatch)
+        }
+
+        for (let $sec of $settingSections) {
+          if (sectionMatchMap.get($sec)) {
+            groupHasMatches = true
+            totalMatchingOptions++
+            let parent = $sec.parentElement?.closest('section:not(.group)')
+            while (parent && $group.contains(parent)) {
+              sectionMatchMap.set(parent, true)
+              parent = parent.parentElement?.closest('section:not(.group)')
+            }
+          }
+        }
+
+        for (let $sec of $settingSections) {
+          let isVisible = sectionMatchMap.get($sec) || false
+          if (isVisible) {
+            $sec.classList.remove('search-hidden')
+            let directMatched = words.every(w => (groupTitle + ' ' + getDirectText($sec)).includes(w))
+            $sec.classList.toggle('search-matched-item', directMatched)
+          } else {
+            $sec.classList.add('search-hidden')
+            $sec.classList.remove('search-matched-item')
+          }
+        }
+
+        if (groupHasMatches) {
+          $group.classList.remove('search-hidden')
+        } else {
+          $group.classList.add('search-hidden')
+        }
+      }
+
+      if ($group.contains($experiments) || $group === $experiments || $group.querySelector('#experiments')) {
+        if (groupHasMatches) {
+          $experiments.open = true
+        }
+      }
+    }
+
+    if ($noMatches) {
+      $noMatches.style.display = totalMatchingOptions === 0 ? 'block' : 'none'
+    }
+  }
+
+  $searchInput.addEventListener('input', performSearch)
+
+  if ($clearBtn) {
+    $clearBtn.addEventListener('click', () => {
+      $searchInput.value = ''
+      $searchInput.focus()
+      performSearch()
+    })
+  }
+
+  $searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if ($searchInput.value) {
+        e.preventDefault()
+        $searchInput.value = ''
+        performSearch()
+      } else {
+        $searchInput.blur()
+      }
+    }
+  })
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement !== $searchInput) {
+      let tagName = document.activeElement?.tagName?.toLowerCase()
+      if (tagName !== 'input' && tagName !== 'textarea' && tagName !== 'select') {
+        e.preventDefault()
+        $searchInput.focus()
+        $searchInput.select()
+      }
+    }
+  })
+}
+
+let settingsStatusTimeout = null
+
+/**
+ * Display a temporary status message in the Settings group.
+ * @param {string} message
+ * @param {'success' | 'error' | 'info'} [type='info']
+ */
+function showSettingsStatus(message, type = 'info') {
+  let $status = document.getElementById('settingsStatus')
+  if (!$status) return
+  if (settingsStatusTimeout) {
+    clearTimeout(settingsStatusTimeout)
+    settingsStatusTimeout = null
+  }
+  $status.textContent = message
+  $status.className = `settings-status ${type}`
+  $status.style.display = 'block'
+  settingsStatusTimeout = setTimeout(() => {
+    $status.style.display = 'none'
+    $status.textContent = ''
+    $status.className = 'settings-status'
+    settingsStatusTimeout = null
+  }, 6000)
+}
+
+function exportSettings() {
+  try {
+    let settingsToExport = {}
+    for (let key of Object.keys(defaultConfig)) {
+      // Exclude platform-specific runtime version property
+      if (key === 'version') continue
+      if (key in optionsConfig) {
+        settingsToExport[key] = optionsConfig[key]
+      }
+    }
+
+    let backupData = {
+      format: 'TweetEnhc Settings',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      settings: settingsToExport,
+    }
+
+    let jsonStr = JSON.stringify(backupData, null, 2)
+    let blob = new Blob([jsonStr], { type: 'application/json' })
+    let url = URL.createObjectURL(blob)
+    let $a = document.createElement('a')
+    $a.download = 'tweetenhc-settings.json'
+    $a.href = url
+    document.body.appendChild($a)
+    $a.click()
+    document.body.removeChild($a)
+    URL.revokeObjectURL(url)
+
+    showSettingsStatus(chrome.i18n.getMessage('exportSettingsSuccess') || 'Settings exported successfully', 'success')
+  } catch (err) {
+    console.error('Export settings error:', err)
+    showSettingsStatus(chrome.i18n.getMessage('importSettingsError') || 'Export failed', 'error')
+  }
+}
+
+/**
+ * Handle import settings file selection.
+ * @param {Event} e
+ */
+function onImportFileSelected(e) {
+  let $input = /** @type {HTMLInputElement} */ (e.target)
+  let file = $input.files?.[0]
+  // Reset input immediately so user can re-import the same file if needed
+  $input.value = ''
+  if (!file) return
+
+  let reader = new FileReader()
+  reader.onload = (event) => {
+    try {
+      let content = /** @type {string} */ (event.target?.result)
+      let parsed
+      try {
+        parsed = JSON.parse(content)
+      } catch {
+        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidJson'), 'error')
+        return
+      }
+
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat'), 'error')
+        return
+      }
+
+      // Format identifier check
+      let validFormat = parsed.format === 'TweetEnhc Settings' || parsed.format === 'Control Panel for Twitter Settings'
+      if (!validFormat) {
+        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat'), 'error')
+        return
+      }
+
+      // Version check (only version 1 is currently supported)
+      if (typeof parsed.version !== 'number' || parsed.version > 1 || parsed.version < 1) {
+        showSettingsStatus(chrome.i18n.getMessage('importSettingsUnsupportedVersion'), 'error')
+        return
+      }
+
+      let importedSettings = parsed.settings
+      if (!importedSettings || typeof importedSettings !== 'object' || Array.isArray(importedSettings)) {
+        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat'), 'error')
+        return
+      }
+
+      // Confirmation before overwrite
+      let confirmMsg = chrome.i18n.getMessage('importSettingsConfirm') || 'Importing settings will overwrite your current configuration. Are you sure you want to proceed?'
+      if (!window.confirm(confirmMsg)) {
+        return
+      }
+
+      // Sanitize and validate imported settings against defaultConfig
+      /** @type {Partial<import("./types").Config>} */
+      let sanitized = {}
+
+      for (let [key, val] of Object.entries(importedSettings)) {
+        // Exclude platform-specific runtime version property and unknown keys
+        if (key === 'version' || !(key in defaultConfig)) continue
+
+        let defaultVal = defaultConfig[key]
+        let defaultType = typeof defaultVal
+
+        if (defaultType === 'boolean') {
+          if (typeof val === 'boolean') {
+            sanitized[key] = val
+          }
+        } else if (defaultType === 'string') {
+          if (typeof val === 'string') {
+            sanitized[key] = val
+          }
+        } else if (defaultType === 'number') {
+          if (typeof val === 'number') {
+            sanitized[key] = val
+          }
+        } else if (Array.isArray(defaultVal)) {
+          if (Array.isArray(val)) {
+            sanitized[key] = val
+          }
+        }
+      }
+
+      // Handle legacy or derived config values
+      // @ts-ignore
+      if (sanitized.twitterBlueChecks === 'dim') {
+        sanitized.twitterBlueChecks = 'replace'
+      }
+      if (sanitized.fullWidthContent && !sanitized.timelineWidth) {
+        sanitized.timelineWidth = 'full'
+      }
+      if (sanitized.mediaView) {
+        let isCarousel = sanitized.mediaView === 'carousel'
+        let isGrid = sanitized.mediaView === 'grid'
+        sanitized.horizontalMediaCarousel = isCarousel
+        sanitized.revertMediaCarousel = isGrid || isCarousel
+      }
+
+      chrome.storage.local.set(sanitized, () => {
+        if (chrome.runtime.lastError) {
+          console.error('chrome.storage.local.set error:', chrome.runtime.lastError)
+          showSettingsStatus(chrome.i18n.getMessage('importSettingsError'), 'error')
+          return
+        }
+
+        Object.assign(optionsConfig, sanitized)
+        $body.classList.toggle('debug', optionsConfig.debug === true)
+        $experiments.open = Boolean(optionsConfig.customCss)
+        applyConfig()
+        showSettingsStatus(chrome.i18n.getMessage('importSettingsSuccess'), 'success')
+      })
+    } catch (err) {
+      console.error('Import settings error:', err)
+      showSettingsStatus(chrome.i18n.getMessage('importSettingsError'), 'error')
+    }
+  }
+
+  reader.onerror = () => {
+    showSettingsStatus(chrome.i18n.getMessage('importSettingsError'), 'error')
+  }
+
+  reader.readAsText(file)
+}
+
+function setupSettingsManagement() {
+  if ($exportSettingsButton) {
+    $exportSettingsButton.addEventListener('click', exportSettings)
+  }
+  if ($importSettingsButton && $importSettingsInput) {
+    $importSettingsButton.addEventListener('click', () => {
+      $importSettingsInput.click()
+    })
+    $importSettingsInput.addEventListener('change', onImportFileSelected)
+  }
+}
 //#endregion
 
 //#region Main
@@ -870,6 +1271,9 @@ function main() {
     if (!storedConfig.showLabels) {
       storedConfig.showLabels = 'always'
     }
+    if (!storedConfig.mediaView) {
+      storedConfig.mediaView = storedConfig.horizontalMediaCarousel !== false ? 'carousel' : (storedConfig.revertMediaCarousel ? 'grid' : 'default')
+    }
     if (storedConfig.downloadFilenameFormat) {
       storedConfig.downloadFilenameFormat = normalizeFilenameTemplate(storedConfig.downloadFilenameFormat)
     }
@@ -885,6 +1289,8 @@ function main() {
     chrome.storage.onChanged.addListener(onStorageChanged)
 
     setupFilenameFormatControls()
+    setupOptionsSearch()
+    setupSettingsManagement()
 
     if (!optionsConfig.debug) {
       let $version = document.querySelector('#version')

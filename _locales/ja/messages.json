@@ -14,6 +14,9 @@
   "alwaysUseLatestTweetsLabel": {
     "message": "常にタイムラインをフォロー中（時系列順）にする"
   },
+  "autoExpandCaptionsLabel": {
+    "message": "ツイートのキャプションを自動的に展開する"
+  },
   "appStoreSubtitle": {
     "message": "タイムラインを制御せよ"
   },
@@ -460,6 +463,21 @@
   "sortRepliesLabel": {
     "message": "返信のデフォルトの並べ替え"
   },
+  "mediaViewLabel": {
+    "message": "メディア表示"
+  },
+  "mediaViewInfo": {
+    "message": "複数画像の投稿の表示方法を選択します"
+  },
+  "mediaViewDefaultOption": {
+    "message": "デフォルト"
+  },
+  "mediaViewGridOption": {
+    "message": "旧Twitter"
+  },
+  "mediaViewCarouselOption": {
+    "message": "水平カルーセル"
+  },
   "tweakNewLayoutInfo": {
     "message": "実験的機能 - 新しいレイアウトがある場合にのみ有効にしてください"
   },
@@ -492,5 +510,50 @@
   },
   "xFixesLabel": {
     "message": "X の修正"
+  },
+  "searchOptionsPlaceholder": {
+    "message": "設定を検索..."
+  },
+  "noMatchingOptions": {
+    "message": "一致する設定が見つかりません"
+  },
+  "searchOptionsLabel": {
+    "message": "検索"
+  },
+  "settingsOptionsLabel": {
+    "message": "設定管理"
+  },
+  "exportSettingsLabel": {
+    "message": "設定をバックアップファイルにエクスポート"
+  },
+  "exportSettingsButton": {
+    "message": "エクスポート"
+  },
+  "importSettingsLabel": {
+    "message": "バックアップファイルから設定をインポート"
+  },
+  "importSettingsButton": {
+    "message": "インポート"
+  },
+  "exportSettingsSuccess": {
+    "message": "設定を正常にエクスポートしました"
+  },
+  "importSettingsConfirm": {
+    "message": "設定をインポートすると現在の設定が上書きされます。続行してもよろしいですか？"
+  },
+  "importSettingsSuccess": {
+    "message": "設定を正常にインポートしました"
+  },
+  "importSettingsInvalidJson": {
+    "message": "設定のインポートに失敗しました: 無効なJSONファイルです"
+  },
+  "importSettingsInvalidFormat": {
+    "message": "設定のインポートに失敗しました: 認識できないファイル形式です"
+  },
+  "importSettingsUnsupportedVersion": {
+    "message": "設定のインポートに失敗しました: サポートされていない設定バージョンです"
+  },
+  "importSettingsError": {
+    "message": "設定のインポートに失敗しました: 予期しないエラーが発生しました"
   }
 }

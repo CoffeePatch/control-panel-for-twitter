@@ -14,6 +14,9 @@
   "alwaysUseLatestTweetsLabel": {
     "message": "Utiliser le fil Abonnements (chronologique) par défaut"
   },
+  "autoExpandCaptionsLabel": {
+    "message": "Développer automatiquement les légendes des tweets"
+  },
   "appStoreSubtitle": {
     "message": "Contrôlez votre fil"
   },
@@ -460,6 +463,21 @@
   "sortRepliesLabel": {
     "message": "Tri par défaut des réponses"
   },
+  "mediaViewLabel": {
+    "message": "Affichage des médias"
+  },
+  "mediaViewInfo": {
+    "message": "Choisissez comment afficher les publications avec plusieurs images"
+  },
+  "mediaViewDefaultOption": {
+    "message": "Par défaut"
+  },
+  "mediaViewGridOption": {
+    "message": "Ancien Twitter"
+  },
+  "mediaViewCarouselOption": {
+    "message": "Carrousel horizontal"
+  },
   "tweakNewLayoutInfo": {
     "message": "Expérimental - n'activez que si vous avez la nouvelle mise en page"
   },
@@ -492,5 +510,50 @@
   },
   "xFixesLabel": {
     "message": "Correctifs de X"
+  },
+  "searchOptionsPlaceholder": {
+    "message": "Rechercher des options..."
+  },
+  "noMatchingOptions": {
+    "message": "Aucune option correspondante trouvée"
+  },
+  "searchOptionsLabel": {
+    "message": "Recherche"
+  },
+  "settingsOptionsLabel": {
+    "message": "Paramètres"
+  },
+  "exportSettingsLabel": {
+    "message": "Exporter les paramètres vers un fichier de sauvegarde"
+  },
+  "exportSettingsButton": {
+    "message": "Exporter"
+  },
+  "importSettingsLabel": {
+    "message": "Importer les paramètres depuis un fichier de sauvegarde"
+  },
+  "importSettingsButton": {
+    "message": "Importer"
+  },
+  "exportSettingsSuccess": {
+    "message": "Paramètres exportés avec succès"
+  },
+  "importSettingsConfirm": {
+    "message": "L'importation des paramètres écrasera votre configuration actuelle. Êtes-vous sûr de vouloir continuer ?"
+  },
+  "importSettingsSuccess": {
+    "message": "Paramètres importés avec succès"
+  },
+  "importSettingsInvalidJson": {
+    "message": "Échec de l'importation : Fichier JSON non valide"
+  },
+  "importSettingsInvalidFormat": {
+    "message": "Échec de l'importation : Format de fichier non reconnu"
+  },
+  "importSettingsUnsupportedVersion": {
+    "message": "Échec de l'importation : Version de configuration non prise en charge"
+  },
+  "importSettingsError": {
+    "message": "Échec de l'importation : Une erreur inattendue est survenue"
   }
 }

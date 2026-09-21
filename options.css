@@ -614,3 +614,118 @@ body.iOS.safari .checkbox input:focus + .toggle {
 .reset-btn:hover {
   background: rgba(128, 128, 128, 0.15);
 }
+
+/* Options search */
+.options-search-container {
+  padding: 8px 12px !important;
+  margin-bottom: 8px !important;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.options-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#optionsSearchInput {
+  width: 100%;
+  padding: 7px 32px 7px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background: rgba(128, 128, 128, 0.08);
+  color: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+#optionsSearchInput:focus {
+  border-color: #1d9bf0;
+  background: transparent;
+  box-shadow: none !important;
+}
+
+#optionsSearchInput::-webkit-search-cancel-button {
+  display: none;
+}
+
+#optionsSearchInput::placeholder {
+  color: inherit;
+  opacity: 0.55;
+}
+
+#clearOptionsSearch {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 18px;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  border-radius: 4px;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+  margin-left: 4px;
+}
+
+#clearOptionsSearch:hover {
+  opacity: 1;
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
+#noSearchMatches {
+  text-align: center;
+  padding: 20px 12px 12px 12px;
+  font-size: 13px;
+  opacity: 0.75;
+  color: inherit;
+}
+
+/* Search filtering states */
+.search-hidden {
+  display: none !important;
+}
+
+.search-matched-item {
+  background-color: rgba(29, 155, 240, 0.08);
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+/* Settings import/export controls & status feedback */
+label.button button,
+label.button input[type="button"] {
+  cursor: pointer;
+}
+
+.settings-status {
+  margin: 8px 12px 12px 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.settings-status.success {
+  background-color: rgba(0, 186, 124, 0.12);
+  color: rgb(0, 186, 124);
+  border: 1px solid rgba(0, 186, 124, 0.3);
+}
+
+.settings-status.error {
+  background-color: rgba(244, 33, 46, 0.12);
+  color: rgb(244, 33, 46);
+  border: 1px solid rgba(244, 33, 46, 0.3);
+}
+
+.settings-status.info {
+  background-color: rgba(29, 155, 240, 0.12);
+  color: rgb(29, 155, 240);
+  border: 1px solid rgba(29, 155, 240, 0.3);
+}
+

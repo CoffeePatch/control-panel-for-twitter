@@ -14,6 +14,9 @@
   "alwaysUseLatestTweetsLabel": {
     "message": "기본적으로 팔로잉 (시간순) 타임라인 사용"
   },
+  "autoExpandCaptionsLabel": {
+    "message": "트윗 캡션 자동 확장"
+  },
   "appStoreSubtitle": {
     "message": "타임라인을 통제하세요"
   },
@@ -460,6 +463,21 @@
   "sortRepliesLabel": {
     "message": "답글의 기본 정렬"
   },
+  "mediaViewLabel": {
+    "message": "미디어 보기"
+  },
+  "mediaViewInfo": {
+    "message": "여러 이미지가 포함된 게시물을 표시하는 방법을 선택합니다"
+  },
+  "mediaViewDefaultOption": {
+    "message": "기본값"
+  },
+  "mediaViewGridOption": {
+    "message": "이전 트위터"
+  },
+  "mediaViewCarouselOption": {
+    "message": "가로 캐러셀"
+  },
   "tweakNewLayoutInfo": {
     "message": "실험적 기능 - 새 레이아웃이 있는 경우에만 활성화하세요"
   },
@@ -492,5 +510,50 @@
   },
   "xFixesLabel": {
     "message": "X 수정 사항"
+  },
+  "searchOptionsPlaceholder": {
+    "message": "옵션 검색..."
+  },
+  "noMatchingOptions": {
+    "message": "일치하는 옵션을 찾을 수 없습니다"
+  },
+  "searchOptionsLabel": {
+    "message": "검색"
+  },
+  "settingsOptionsLabel": {
+    "message": "설정 관리"
+  },
+  "exportSettingsLabel": {
+    "message": "설정을 백업 파일로 내보내기"
+  },
+  "exportSettingsButton": {
+    "message": "내보내기"
+  },
+  "importSettingsLabel": {
+    "message": "백업 파일에서 설정 가져오기"
+  },
+  "importSettingsButton": {
+    "message": "가져오기"
+  },
+  "exportSettingsSuccess": {
+    "message": "설정을 성공적으로 내보냈습니다"
+  },
+  "importSettingsConfirm": {
+    "message": "설정을 가져오면 현재 설정이 덮어쓰여집니다. 계속하시겠습니까?"
+  },
+  "importSettingsSuccess": {
+    "message": "설정을 성공적으로 가져왔습니다"
+  },
+  "importSettingsInvalidJson": {
+    "message": "설정 가져오기 실패: 유효하지 않은 JSON 파일입니다"
+  },
+  "importSettingsInvalidFormat": {
+    "message": "설정 가져오기 실패: 인식할 수 없는 파일 형식입니다"
+  },
+  "importSettingsUnsupportedVersion": {
+    "message": "설정 가져오기 실패: 지원되지 않는 설정 버전입니다"
+  },
+  "importSettingsError": {
+    "message": "설정 가져오기 실패: 예기치 않은 오류가 발생했습니다"
   }
 }

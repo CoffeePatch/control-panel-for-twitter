@@ -40,6 +40,9 @@ chrome.storage.local.get((/** @type {Partial<import("./types").Config>} */ store
   if (storedConfig.twitterBlueChecks == 'dim') {
     storedConfig.twitterBlueChecks = 'replace'
   }
+  if (!storedConfig.mediaView) {
+    storedConfig.mediaView = storedConfig.horizontalMediaCarousel !== false ? 'carousel' : (storedConfig.revertMediaCarousel ? 'grid' : 'default')
+  }
 
   $settings = document.createElement('script')
   $settings.type = 'text/json'

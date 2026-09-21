@@ -14,6 +14,9 @@
   "alwaysUseLatestTweetsLabel": {
     "message": "默认使用 关注（按时间顺序）的时间线"
   },
+  "autoExpandCaptionsLabel": {
+    "message": "自动展开推文文字/说明"
+  },
   "appStoreSubtitle": {
     "message": "掌控你的时间线"
   },
@@ -472,6 +475,21 @@
   "sortRepliesLabel": {
     "message": "回复的默认排序"
   },
+  "mediaViewLabel": {
+    "message": "媒体视图"
+  },
+  "mediaViewInfo": {
+    "message": "选择多图推文的显示方式"
+  },
+  "mediaViewDefaultOption": {
+    "message": "默认"
+  },
+  "mediaViewGridOption": {
+    "message": "旧版 Twitter"
+  },
+  "mediaViewCarouselOption": {
+    "message": "水平轮播"
+  },
   "tweakNewLayoutInfo": {
     "message": "实验性功能 - 仅在您拥有新布局时启用"
   },
@@ -504,5 +522,50 @@
   },
   "xFixesLabel": {
     "message": "X 修复"
+  },
+  "searchOptionsPlaceholder": {
+    "message": "搜索选项..."
+  },
+  "noMatchingOptions": {
+    "message": "未找到匹配的选项"
+  },
+  "searchOptionsLabel": {
+    "message": "搜索"
+  },
+  "settingsOptionsLabel": {
+    "message": "设置管理"
+  },
+  "exportSettingsLabel": {
+    "message": "将设置导出到备份文件"
+  },
+  "exportSettingsButton": {
+    "message": "导出"
+  },
+  "importSettingsLabel": {
+    "message": "从备份文件导入设置"
+  },
+  "importSettingsButton": {
+    "message": "导入"
+  },
+  "exportSettingsSuccess": {
+    "message": "设置导出成功"
+  },
+  "importSettingsConfirm": {
+    "message": "导入设置将覆盖您当前的配置。您确定要继续吗？"
+  },
+  "importSettingsSuccess": {
+    "message": "设置导入成功"
+  },
+  "importSettingsInvalidJson": {
+    "message": "导入设置失败：无效的 JSON 文件"
+  },
+  "importSettingsInvalidFormat": {
+    "message": "导入设置失败：无法识别的文件格式"
+  },
+  "importSettingsUnsupportedVersion": {
+    "message": "导入设置失败：不受支持的配置版本"
+  },
+  "importSettingsError": {
+    "message": "导入设置失败：发生意外错误"
   }
 }

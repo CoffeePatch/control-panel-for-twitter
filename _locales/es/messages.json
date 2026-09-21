@@ -14,6 +14,9 @@
   "alwaysUseLatestTweetsLabel": {
     "message": "Usar la timeline cronológica (Siguiendo) por defecto"
   },
+  "autoExpandCaptionsLabel": {
+    "message": "Expandir automáticamente los subtítulos de los tweets"
+  },
   "appStoreSubtitle": {
     "message": "Controla tu línea de tiempo"
   },
@@ -460,6 +463,21 @@
   "sortRepliesLabel": {
     "message": "Orden predeterminado de las respuestas"
   },
+  "mediaViewLabel": {
+    "message": "Vista de multimedia"
+  },
+  "mediaViewInfo": {
+    "message": "Elige cómo se muestran las publicaciones con varias imágenes"
+  },
+  "mediaViewDefaultOption": {
+    "message": "Predeterminado"
+  },
+  "mediaViewGridOption": {
+    "message": "Twitter antiguo"
+  },
+  "mediaViewCarouselOption": {
+    "message": "Carrusel horizontal"
+  },
   "tweakNewLayoutInfo": {
     "message": "Experimental - solo activar si tienes el nuevo diseño"
   },
@@ -492,5 +510,50 @@
   },
   "xFixesLabel": {
     "message": "Correcciones de X"
+  },
+  "searchOptionsPlaceholder": {
+    "message": "Buscar opciones..."
+  },
+  "noMatchingOptions": {
+    "message": "No se encontraron opciones coincidentes"
+  },
+  "searchOptionsLabel": {
+    "message": "Búsqueda"
+  },
+  "settingsOptionsLabel": {
+    "message": "Ajustes"
+  },
+  "exportSettingsLabel": {
+    "message": "Exportar ajustes a un archivo de copia de seguridad"
+  },
+  "exportSettingsButton": {
+    "message": "Exportar"
+  },
+  "importSettingsLabel": {
+    "message": "Importar ajustes desde un archivo de copia de seguridad"
+  },
+  "importSettingsButton": {
+    "message": "Importar"
+  },
+  "exportSettingsSuccess": {
+    "message": "Ajustes exportados correctamente"
+  },
+  "importSettingsConfirm": {
+    "message": "Importar los ajustes sobrescribirá tu configuración actual. ¿Seguro que deseas continuar?"
+  },
+  "importSettingsSuccess": {
+    "message": "Ajustes importados correctamente"
+  },
+  "importSettingsInvalidJson": {
+    "message": "Error al importar ajustes: Archivo JSON no válido"
+  },
+  "importSettingsInvalidFormat": {
+    "message": "Error al importar ajustes: Formato de archivo no reconocido"
+  },
+  "importSettingsUnsupportedVersion": {
+    "message": "Error al importar ajustes: Versión de configuración no admitida"
+  },
+  "importSettingsError": {
+    "message": "Error al importar ajustes: Se produjo un error inesperado"
   }
 }

@@ -20,6 +20,18 @@
         <span class="toggle"></span>
       </label>
     </section>
+    <section class="group options-search-container">
+      <div class="options-search-bar">
+        <svg class="options-search-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+          <path fill="currentColor" d="M10.25 3.75a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zm-8.5 6.5a8.5 8.5 0 1 1 15.176 5.262l4.681 4.682a1 1 0 0 1-1.414 1.414l-4.682-4.681A8.5 8.5 0 0 1 1.75 10.25z"/>
+        </svg>
+        <input type="search" id="optionsSearchInput" placeholder="Search options..." autocomplete="off" spellcheck="false">
+        <button type="button" id="clearOptionsSearch" aria-label="Clear search" title="Clear search" style="display: none;">&times;</button>
+      </div>
+      <div id="noSearchMatches" style="display: none;">
+        <span id="noMatchingOptionsLabel">No matching options found</span>
+      </div>
+    </section>
     <section class="group labelled">
       <label id="homeTimelineOptionsLabel">
         Home timeline
@@ -185,6 +197,19 @@
           <input type="checkbox" name="hideUnavailableQuoteTweets">
           <span class="toggle"></span>
         </label>
+      </section>
+      <section class="select">
+        <label>
+          <span id="mediaViewLabel">Media view</span>
+          <select name="mediaView">
+            <option value="default" id="mediaViewDefaultOption">Default</option>
+            <option value="grid" id="mediaViewGridOption">Old Twitter</option>
+            <option value="carousel" id="mediaViewCarouselOption">Horizontal carousel</option>
+          </select>
+        </label>
+        <p id="mediaViewInfo">
+          Choose how multi-image posts are displayed
+        </p>
       </section>
       <section class="checkbox">
         <label>
@@ -385,6 +410,13 @@
         <label>
           <span id="addUserHoverCardAccountLocationLabel">Show account location in user hover cards</span>
           <input type="checkbox" name="addUserHoverCardAccountLocation">
+          <span class="toggle"></span>
+        </label>
+      </section>
+      <section class="checkbox">
+        <label>
+          <span id="autoExpandCaptionsLabel">Auto expand tweet captions</span>
+          <input type="checkbox" name="autoExpandCaptions">
           <span class="toggle"></span>
         </label>
       </section>
@@ -643,6 +675,10 @@
           <span class="toggle"></span>
         </label>
       </section>
+    </section>
+
+    <section class="group labelled desktop">
+      <label id="searchOptionsLabel">Search</label>
       <section class="checkbox desktop">
         <label>
           <span id="collapsibleSearchLabel">Collapsible floating search</span>
@@ -1012,6 +1048,24 @@
           <span class="toggle"></span>
         </label>
       </section>
+    </section>
+
+    <section class="group labelled">
+      <label id="settingsOptionsLabel">Settings</label>
+      <section>
+        <label class="button">
+          <span id="exportSettingsLabel">Export settings to a backup file</span>
+          <button type="button" id="exportSettingsButton">Export</button>
+        </label>
+      </section>
+      <section>
+        <label class="button">
+          <span id="importSettingsLabel">Import settings from a backup file</span>
+          <button type="button" id="importSettingsButton">Import</button>
+        </label>
+        <input type="file" id="importSettingsInput" accept=".json,application/json" style="display: none;">
+      </section>
+      <div id="settingsStatus" class="settings-status" style="display: none;"></div>
     </section>
 
     <section>

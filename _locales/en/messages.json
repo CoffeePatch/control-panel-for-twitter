@@ -14,6 +14,9 @@
   "alwaysUseLatestTweetsLabel": {
     "message": "Use the Following (chronological) timeline by default"
   },
+  "autoExpandCaptionsLabel": {
+    "message": "Auto expand tweet captions"
+  },
   "appStoreSubtitle": {
     "message": "Take control of your timeline",
     "description": "<= 30 characters"
@@ -575,6 +578,21 @@
   "timelineWidthLabel": {
     "message": "Timeline width"
   },
+  "mediaViewLabel": {
+    "message": "Media view"
+  },
+  "mediaViewInfo": {
+    "message": "Choose how multi-image posts are displayed"
+  },
+  "mediaViewDefaultOption": {
+    "message": "Default"
+  },
+  "mediaViewGridOption": {
+    "message": "Old Twitter"
+  },
+  "mediaViewCarouselOption": {
+    "message": "Horizontal carousel"
+  },
   "collapsibleSearchLabel": {
     "message": "Collapsible floating search"
   },
@@ -611,5 +629,50 @@
   },
   "xFixesLabel": {
     "message": "X fixes"
+  },
+  "searchOptionsPlaceholder": {
+    "message": "Search options..."
+  },
+  "noMatchingOptions": {
+    "message": "No matching options found"
+  },
+  "searchOptionsLabel": {
+    "message": "Search"
+  },
+  "settingsOptionsLabel": {
+    "message": "Settings"
+  },
+  "exportSettingsLabel": {
+    "message": "Export settings to a backup file"
+  },
+  "exportSettingsButton": {
+    "message": "Export"
+  },
+  "importSettingsLabel": {
+    "message": "Import settings from a backup file"
+  },
+  "importSettingsButton": {
+    "message": "Import"
+  },
+  "exportSettingsSuccess": {
+    "message": "Settings exported successfully"
+  },
+  "importSettingsConfirm": {
+    "message": "Importing settings will overwrite your current configuration. Are you sure you want to proceed?"
+  },
+  "importSettingsSuccess": {
+    "message": "Settings imported successfully"
+  },
+  "importSettingsInvalidJson": {
+    "message": "Failed to import settings: Invalid JSON file"
+  },
+  "importSettingsInvalidFormat": {
+    "message": "Failed to import settings: Unrecognized file format"
+  },
+  "importSettingsUnsupportedVersion": {
+    "message": "Failed to import settings: Unsupported configuration version"
+  },
+  "importSettingsError": {
+    "message": "Failed to import settings: An unexpected error occurred"
   }
 }

@@ -91,7 +91,11 @@ document.addEventListener('cpftDownloadMedia', (event) => {
   try {
     let parsed = new URL(url)
     let host = parsed.hostname.toLowerCase()
-    if (!host.endsWith('.twimg.com') && !host.endsWith('.twitter.com') && !host.endsWith('.x.com')) {
+    if (
+      host !== 'twimg.com' && !host.endsWith('.twimg.com') &&
+      host !== 'twitter.com' && !host.endsWith('.twitter.com') &&
+      host !== 'x.com' && !host.endsWith('.x.com')
+    ) {
       console.warn('[CPFT] Download rejected: unauthorized domain', host)
       return
     }
@@ -108,5 +112,30 @@ document.addEventListener('cpftDownloadMedia', (event) => {
     if (chrome.runtime.lastError) {
       console.error('[CPFT] Download error:', chrome.runtime.lastError.message)
     }
+  })
+})
+
+// Forward open in new tab requests from page context to background service worker
+document.addEventListener('cpftOpenTab', (event) => {
+  let data = /** @type {any} */ (event).detail
+  if (!data || typeof data !== 'object') return
+  let { url, active } = data
+  if (typeof url !== 'string' || (!url.startsWith('https://') && !url.startsWith('http://'))) return
+
+  try {
+    let parsed = new URL(url)
+    let host = parsed.hostname.toLowerCase()
+    if (host !== 'twitter.com' && !host.endsWith('.twitter.com') && host !== 'x.com' && !host.endsWith('.x.com')) {
+      console.warn('[CPFT] Open tab rejected: unauthorized domain', host)
+      return
+    }
+  } catch {
+    return
+  }
+
+  chrome.runtime.sendMessage({
+    type: 'OPEN_TAB',
+    url,
+    active: Boolean(active),
   })
 })

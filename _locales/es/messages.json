@@ -555,5 +555,14 @@
   },
   "importSettingsError": {
     "message": "Error al importar ajustes: Se produjo un error inesperado"
+  },
+  "openSelectedLinksInNewTabLabel": {
+    "message": "Abrir enlaces seleccionados en una nueva pestaña"
+  },
+  "openSelectedLinksInNewTabInfo": {
+    "message": "Abrir perfiles de autores de tweets, direcciones de video y enlaces de fuentes de video en una nueva pestaña"
+  },
+  "openVideoInNewTabMenuItem": {
+    "message": "Abrir video en una nueva pestaña"
   }
 }

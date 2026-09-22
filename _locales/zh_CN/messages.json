@@ -567,5 +567,14 @@
   },
   "importSettingsError": {
     "message": "导入设置失败：发生意外错误"
+  },
+  "openSelectedLinksInNewTabLabel": {
+    "message": "在新标签页中打开所选链接"
+  },
+  "openSelectedLinksInNewTabInfo": {
+    "message": "在新标签页中打开推文作者个人资料、视频地址和视频来源链接"
+  },
+  "openVideoInNewTabMenuItem": {
+    "message": "在新标签页中打开视频"
   }
 }

@@ -180,6 +180,7 @@ const config = {
   timelineWidth: 'default',
   timelineAlignment: 'default',
   showLabels: 'always',
+  openSelectedLinksInNewTab: false,
   centerNavigation: false,
   removeTimelineBorders: false,
   removeTweetBorders: false,
@@ -690,6 +691,7 @@ const locales = {
     LIVE_ON_X: 'Live on X',
     MOST_RELEVANT: 'Most relevant',
     MUTE_THIS_CONVERSATION: 'Mute this conversation',
+    OPEN_VIDEO_IN_NEW_TAB: 'Open video in new tab',
     POST_ALL: 'Post all',
     POST_UNAVAILABLE: 'This post is unavailable.',
     PROFILE_SUMMARY: 'Profile Summary',
@@ -8289,12 +8291,477 @@ function getVerifiedProps($svg) {
   return props
 }
 
+//#region Open Selected Links in New Tab
+
+/** @type {HTMLElement|null} */
+let lastContextMenuVideoTarget = null
+/** @type {{x: number, y: number}|null} */
+let lastContextMenuCoords = null
+let lastContextMenuVideoTimestamp = 0
+/** @type {MutationObserver|null} */
+let videoMenuObserver = null
+/** @type {number|null} */
+let videoMenuTimeout = null
+
+/**
+ * Dispatches a request to open a URL in a new background tab.
+ * @param {string} url
+ * @param {boolean} [active=false]
+ */
+function openInNewTab(url, active = false) {
+  if (!url || typeof url !== 'string') return
+  let fullUrl = url.startsWith('http') ? url : new URL(url, location.origin).href
+  try {
+    let parsed = new URL(fullUrl)
+    let host = parsed.hostname.toLowerCase()
+    if (host !== 'twitter.com' && !host.endsWith('.twitter.com') && host !== 'x.com' && !host.endsWith('.x.com')) {
+      return
+    }
+  } catch {
+    return
+  }
+  document.dispatchEvent(new CustomEvent('cpftOpenTab', {
+    detail: { url: fullUrl, active }
+  }))
+}
+
+/**
+ * Checks if a clicked link represents the author/account identity of a tweet.
+ * Specifically targets the display name and handle links in [data-testid="User-Name"],
+ * as well as the avatar in [data-testid="Tweet-User-Avatar"].
+ * Excludes timestamp links, status links, mentions inside tweet text, hashtags, etc.
+ * @param {HTMLAnchorElement} link
+ * @returns {boolean}
+ */
+function isTargetAuthorLink(link) {
+  if (!link || !link.getAttribute) return false
+  let href = link.getAttribute('href')
+  if (!href || href.startsWith('#') || href.includes('/status/')) return false
+
+  // Must be inside a tweet or article
+  let $tweet = link.closest(Selectors.TWEET) || link.closest('article') || link.closest('[data-testid="cellInnerDiv"]')
+  if (!$tweet) return false
+
+  // 1. Author display name or handle inside [data-testid="User-Name"]
+  let userNameContainer = link.closest('[data-testid="User-Name"]')
+  if (userNameContainer) {
+    // Exclude timestamp links
+    if (link.querySelector('time') || link.closest('time')) return false
+    return true
+  }
+
+  // 2. Author avatar
+  let avatarContainer = link.closest('[data-testid="Tweet-User-Avatar"]')
+  if (avatarContainer) {
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Checks if a clicked link is the "FROM <Account>" video attribution link
+ * shown near the bottom-left of certain videos.
+ * @param {HTMLAnchorElement} link
+ * @returns {boolean}
+ */
+function isTargetAttributionLink(link) {
+  if (!link || !link.getAttribute) return false
+  let href = link.getAttribute('href')
+  if (!href || href.startsWith('#')) return false
+
+  // Must be inside a video player container
+  let videoContainer = link.closest('[data-testid="videoPlayer"], [data-testid="videoComponent"]')
+  if (!videoContainer) return false
+
+  // Exclude controls/toolbars/menus if any
+  if (link.closest('[data-testid="app-bar"], [role="toolbar"], [role="menu"]')) return false
+
+  return true
+}
+
+/**
+ * Extracts a tweet's canonical video address from a tweet DOM element.
+ * @param {HTMLElement} $tweet
+ * @returns {string|null}
+ */
+function getVideoUrlFromTweet($tweet) {
+  if (!$tweet) return null
+  let { author, username, tweetId } = getTweetMetadata($tweet)
+  let user = (username || author || '').replace(/^@/, '')
+  if (user && tweetId) {
+    return `https://${location.host}/${user}/status/${tweetId}/video/1`
+  }
+
+  let statusLinks = Array.from($tweet.querySelectorAll('a[href*="/status/"]'))
+  for (let link of statusLinks) {
+    let href = link.getAttribute('href') || ''
+    let m = href.match(/\/([a-zA-Z\d_]{1,20})\/status\/(\d+)/)
+    if (m && !href.includes('/photo/') && !href.includes('/analytics')) {
+      return `https://${location.host}/${m[1]}/status/${m[2]}/video/1`
+    }
+  }
+  return null
+}
+
+/**
+ * Resolves the canonical video address for a video element,
+ * matching what X's native "Copy video address" action uses.
+ * @param {HTMLElement|null} videoEl
+ * @param {HTMLElement} [menuEl]
+ * @returns {string|null}
+ */
+function resolveVideoUrl(videoEl, menuEl) {
+  // 1. If menu itself is inside a tweet article
+  if (menuEl) {
+    let $tweet = menuEl.closest(Selectors.TWEET) || menuEl.closest('article')
+    if ($tweet) {
+      let url = getVideoUrlFromTweet($tweet)
+      if (url) return url
+    }
+  }
+
+  // 2. If video element is known
+  if (videoEl) {
+    // Check if video container has a source attribution link ("FROM <Account>")
+    let videoContainer = videoEl.closest('[data-testid="videoPlayer"], [data-testid="videoComponent"]') || videoEl
+    let $attrib = videoContainer.querySelector?.('a[href*="/status/"]')
+    if ($attrib) {
+      let href = $attrib.getAttribute('href')
+      if (href) {
+        let full = new URL(href, location.origin).href
+        return full.includes('/video/') ? full : `${full.replace(/\/$/, '')}/video/1`
+      }
+    }
+
+    let $tweet = videoEl.closest(Selectors.TWEET) || videoEl.closest('article')
+    if ($tweet) {
+      let url = getVideoUrlFromTweet($tweet)
+      if (url) return url
+    }
+  }
+
+  // 3. Inspect elements under the right-click coordinates
+  if (lastContextMenuCoords) {
+    let elements = document.elementsFromPoint(lastContextMenuCoords.x, lastContextMenuCoords.y)
+    for (let el of elements) {
+      let $tweet = el.closest?.(Selectors.TWEET) || el.closest?.('article')
+      if ($tweet) {
+        let url = getVideoUrlFromTweet($tweet)
+        if (url) return url
+      }
+    }
+  }
+
+  // 4. If currently on focused tweet status page (and not in a reply)
+  let match = location.pathname.match(URL_TWEET_BASE_RE)
+  if (match) {
+    let [_, username, tweetId] = match
+    return `https://${location.host}/${username}/status/${tweetId}/video/1`
+  }
+
+  // 5. Video src fallback if direct HTTP URL
+  let $vid = videoEl?.matches?.('video') ? videoEl : videoEl?.querySelector?.('video')
+  if ($vid && $vid.src && $vid.src.startsWith('http') && !$vid.src.startsWith('blob:')) {
+    return $vid.src
+  }
+
+  return null
+}
+
+/**
+ * Checks if a string matches X's "Copy video address" in any supported locale.
+ * Specifically rejects entire menu containers or page elements by length and exact matching.
+ * @param {string|null|undefined} text
+ * @returns {boolean}
+ */
+function isExactCopyVideoText(text) {
+  if (!text || typeof text !== 'string') return false
+  let trimmed = text.trim().toLowerCase()
+  if (trimmed.length > 45 || trimmed.length < 3) return false
+  return (
+    trimmed === 'copy video address' ||
+    trimmed === 'copy video link' ||
+    trimmed === 'copy video url' ||
+    trimmed.startsWith('copy video') ||
+    trimmed.includes('copiar dirección') ||
+    trimmed.includes("copier l'adresse") ||
+    trimmed.includes("copia l'indirizzo") ||
+    trimmed.includes('動画のアドレス') ||
+    trimmed.includes('動画アドレス') ||
+    trimmed.includes('동영상 주소') ||
+    trimmed.includes('复制视频地址') ||
+    trimmed.includes('複製影片網址')
+  )
+}
+
+/**
+ * Locates the exact "Copy video address" menu item.
+ * @param {HTMLElement|Document} [root=document]
+ * @returns {HTMLElement|null}
+ */
+function findCopyVideoItem(root = document) {
+  // 1. Check all [role="menuitem"]
+  let menuItems = Array.from(root.querySelectorAll('[role="menuitem"]'))
+  for (let item of menuItems) {
+    if (isExactCopyVideoText(item.textContent)) {
+      return item
+    }
+  }
+
+  // 2. Check #layers specifically (where X renders dropdowns)
+  let layers = document.querySelector('#layers')
+  if (layers) {
+    let layerSpans = Array.from(layers.querySelectorAll('span, div'))
+    for (let el of layerSpans) {
+      if (el.children.length === 0 && isExactCopyVideoText(el.textContent)) {
+        return el.closest('[role="menuitem"]') || el.closest('[role="button"]') || el.parentElement
+      }
+    }
+  }
+
+  // 3. Fallback: check any span in root
+  let allSpans = Array.from(root.querySelectorAll('span'))
+  for (let el of allSpans) {
+    if (el.children.length === 0 && isExactCopyVideoText(el.textContent)) {
+      return el.closest('[role="menuitem"]') || el.closest('[role="button"]') || el.parentElement
+    }
+  }
+
+  return null
+}
+
+/**
+ * Attempts to locate X's video context menu and inject "Open video in new tab".
+ * @param {HTMLElement|Document} [root=document]
+ * @returns {boolean}
+ */
+function tryInjectVideoContextMenu(root = document) {
+  if (!config.enabled || !config.openSelectedLinksInNewTab) return false
+
+  let $copyItem = findCopyVideoItem(root)
+  if (!$copyItem) return false
+
+  let parentMenu = $copyItem.parentElement
+  if (!parentMenu) return false
+
+  if (parentMenu.querySelector('[data-cpft-menu-item="open-video-in-new-tab"]')) {
+    return true
+  }
+
+  // Clone $copyItem to inherit exact X styling, dimensions, and classes
+  let $openItem = /** @type {HTMLElement} */ ($copyItem.cloneNode(true))
+  $openItem.setAttribute('data-cpft-menu-item', 'open-video-in-new-tab')
+
+  let labelText = getString('OPEN_VIDEO_IN_NEW_TAB') || 'Open video in new tab'
+
+  // Update text
+  let found = false
+  let textNodes = Array.from($openItem.querySelectorAll('span, div'))
+  for (let node of textNodes) {
+    if (node.children.length === 0 && isExactCopyVideoText(node.textContent)) {
+      node.textContent = labelText
+      found = true
+      break
+    }
+  }
+  if (!found) {
+    let s = $openItem.querySelector('span')
+    if (s) s.textContent = labelText
+    else $openItem.textContent = labelText
+  }
+
+  // Update SVG if present
+  let $svg = $openItem.querySelector('svg')
+  if ($svg) {
+    $svg.innerHTML = '<g><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"></path></g>'
+  }
+
+  // Hover feedback
+  $openItem.addEventListener('mouseenter', () => {
+    $openItem.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'
+  })
+  $openItem.addEventListener('mouseleave', () => {
+    $openItem.style.backgroundColor = ''
+  })
+
+  // Click handler
+  $openItem.addEventListener('click', (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    e.stopImmediatePropagation()
+
+    let videoUrl = resolveVideoUrl(lastContextMenuVideoTarget, $copyItem)
+    if (videoUrl) {
+      openInNewTab(videoUrl, false)
+    }
+
+    let mask = /** @type {HTMLElement} */ (document.querySelector('#layers [data-testid="mask"]'))
+    if (mask) {
+      mask.click()
+    } else {
+      let menu = $openItem.closest('[role="menu"]') || parentMenu
+      menu?.remove?.()
+      document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    }
+  })
+
+  $copyItem.after($openItem)
+  return true
+}
+
+/**
+ * Starts actively watching for X's video context menu to appear after right-click.
+ */
+function startWatchingForVideoContextMenu() {
+  if (videoMenuObserver) {
+    videoMenuObserver.disconnect()
+    videoMenuObserver = null
+  }
+  if (videoMenuTimeout) {
+    clearTimeout(videoMenuTimeout)
+    videoMenuTimeout = null
+  }
+
+  function check() {
+    return tryInjectVideoContextMenu(document)
+  }
+
+  if (check()) return
+
+  for (let delay of [20, 50, 100, 200, 350, 550, 850, 1200, 1800, 2500]) {
+    setTimeout(() => {
+      if (check() && videoMenuObserver) {
+        videoMenuObserver.disconnect()
+        videoMenuObserver = null
+      }
+    }, delay)
+  }
+
+  videoMenuObserver = new MutationObserver(() => {
+    if (check()) {
+      videoMenuObserver?.disconnect()
+      videoMenuObserver = null
+    }
+  })
+
+  let layers = document.querySelector('#layers')
+  if (layers) {
+    videoMenuObserver.observe(layers, { childList: true, subtree: true })
+  }
+  videoMenuObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+  })
+
+  videoMenuTimeout = setTimeout(() => {
+    videoMenuObserver?.disconnect()
+    videoMenuObserver = null
+  }, 5000)
+}
+
+/**
+ * Checks if a newly appeared popup in #layers is X's native video context menu
+ * and injects the "Open video in new tab" action alongside "Copy video address".
+ * @param {HTMLElement} $popup
+ */
+function checkVideoContextMenu($popup) {
+  if (tryInjectVideoContextMenu($popup)) return
+
+  let obs = new MutationObserver(() => {
+    if (tryInjectVideoContextMenu($popup)) {
+      obs.disconnect()
+    }
+  })
+  obs.observe($popup, { childList: true, subtree: true })
+  setTimeout(() => obs.disconnect(), 3000)
+}
+
+/**
+ * Initializes listeners for opening selected links in new tab.
+ */
+function setupOpenSelectedLinksInNewTab() {
+  // Track right-clicked video element and coordinates for Behavior B
+  document.addEventListener('contextmenu', (event) => {
+    if (!config.enabled || !config.openSelectedLinksInNewTab) return
+
+    let target = /** @type {HTMLElement} */ (event.target)
+    lastContextMenuCoords = { x: event.clientX, y: event.clientY }
+    lastContextMenuVideoTimestamp = Date.now()
+
+    // Detect if right click was on or inside a video
+    let elements = document.elementsFromPoint(event.clientX, event.clientY)
+    let foundVideo = null
+    for (let el of elements) {
+      if (el instanceof HTMLVideoElement) {
+        foundVideo = el
+        break
+      }
+      let vid = el.querySelector?.('video')
+      if (vid) {
+        foundVideo = vid
+        break
+      }
+    }
+
+    if (foundVideo) {
+      lastContextMenuVideoTarget = foundVideo
+    } else if (target) {
+      lastContextMenuVideoTarget = target.closest('video') ||
+        target.closest('[data-testid="videoPlayer"], [data-testid="videoComponent"]') ||
+        target.querySelector?.('video') ||
+        target
+    }
+
+    startWatchingForVideoContextMenu()
+  }, true)
+
+  // Intercept click on author profile and video attribution links for Behaviors A & C
+  document.addEventListener('click', (event) => {
+    if (!config.enabled || !config.openSelectedLinksInNewTab) return
+
+    // Preserve middle clicks and modifier clicks
+    if (event.button !== 0) return
+    if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
+
+    let target = /** @type {HTMLElement} */ (event.target)
+    if (!target) return
+
+    let link = /** @type {HTMLAnchorElement} */ (target.closest('a'))
+    if (!link) return
+
+    // Behavior A: Author / profile name in tweet
+    if (isTargetAuthorLink(link)) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      openInNewTab(link.href, false)
+      return
+    }
+
+    // Behavior C: "FROM <Account>" video attribution
+    if (isTargetAttributionLink(link)) {
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      openInNewTab(link.href, false)
+      return
+    }
+  }, true)
+}
+
+//#endregion
+
 /**
  * @param {HTMLElement} $popup
  * @returns {{tookAction: boolean, onPopupClosed?: () => void}}
  */
 function handlePopup($popup) {
   let result = {tookAction: false, onPopupClosed: null}
+
+  if (config.openSelectedLinksInNewTab) {
+    checkVideoContextMenu($popup)
+  }
 
   // Automatically close the Premium sign up popup
   if (desktop && config.hideTwitterBlueUpsells && location.pathname === '/i/premium_sign_up') {
@@ -10833,6 +11300,7 @@ async function main() {
       observeBodyBackgroundColor()
       observeReRenderBoundary()
       setupCollapsibleSearch()
+      setupOpenSelectedLinksInNewTab()
       patchHistory()
       let initialThemeColor = getThemeColorFromState()
       if (initialThemeColor) {
@@ -10947,6 +11415,9 @@ function configChanged(changes) {
   }
   if ('downloadMedia' in changes && !changes.downloadMedia) {
     document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
+  }
+  if ('openSelectedLinksInNewTab' in changes && !changes.openSelectedLinksInNewTab) {
+    document.querySelectorAll('[data-cpft-menu-item="open-video-in-new-tab"]').forEach(el => el.remove())
   }
   if ('autoExpandCaptions' in changes) {
     if (config.autoExpandCaptions) {

@@ -555,5 +555,14 @@
   },
   "importSettingsError": {
     "message": "Échec de l'importation : Une erreur inattendue est survenue"
+  },
+  "openSelectedLinksInNewTabLabel": {
+    "message": "Ouvrir les liens sélectionnés dans un nouvel onglet"
+  },
+  "openSelectedLinksInNewTabInfo": {
+    "message": "Ouvrir les profils d'auteurs de tweets, les adresses vidéo et les liens de sources vidéo dans un nouvel onglet"
+  },
+  "openVideoInNewTabMenuItem": {
+    "message": "Ouvrir la vidéo dans un nouvel onglet"
   }
 }

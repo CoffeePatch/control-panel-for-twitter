@@ -555,5 +555,14 @@
   },
   "importSettingsError": {
     "message": "설정 가져오기 실패: 예기치 않은 오류가 발생했습니다"
+  },
+  "openSelectedLinksInNewTabLabel": {
+    "message": "선택한 링크를 새 탭에서 열기"
+  },
+  "openSelectedLinksInNewTabInfo": {
+    "message": "트윗 작성자 프로필, 동영상 주소 및 동영상 출처 링크를 새 탭에서 엽니다"
+  },
+  "openVideoInNewTabMenuItem": {
+    "message": "새 탭에서 동영상 열기"
   }
 }

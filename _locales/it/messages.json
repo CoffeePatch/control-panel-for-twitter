@@ -556,5 +556,14 @@
   },
   "importSettingsError": {
     "message": "Impossibile importare le impostazioni: si è verificato un errore imprevisto"
+  },
+  "openSelectedLinksInNewTabLabel": {
+    "message": "Apri i link selezionati in una nuova scheda"
+  },
+  "openSelectedLinksInNewTabInfo": {
+    "message": "Apri i profili degli autori dei tweet, gli indirizzi video e i link di origine video in una nuova scheda"
+  },
+  "openVideoInNewTabMenuItem": {
+    "message": "Apri video in una nuova scheda"
   }
 }

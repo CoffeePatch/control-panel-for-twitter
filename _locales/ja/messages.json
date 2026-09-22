@@ -555,5 +555,14 @@
   },
   "importSettingsError": {
     "message": "設定のインポートに失敗しました: 予期しないエラーが発生しました"
+  },
+  "openSelectedLinksInNewTabLabel": {
+    "message": "選択したリンクを新しいタブで開く"
+  },
+  "openSelectedLinksInNewTabInfo": {
+    "message": "ツイート投稿者のプロフィール、動画アドレス、動画元のリンクを新しいタブで開きます"
+  },
+  "openVideoInNewTabMenuItem": {
+    "message": "新しいタブで動画を開く"
   }
 }

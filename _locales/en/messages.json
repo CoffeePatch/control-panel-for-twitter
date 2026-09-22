@@ -674,5 +674,14 @@
   },
   "importSettingsError": {
     "message": "Failed to import settings: An unexpected error occurred"
+  },
+  "openSelectedLinksInNewTabLabel": {
+    "message": "Open selected links in new tab"
+  },
+  "openSelectedLinksInNewTabInfo": {
+    "message": "Open tweet author profiles, video addresses, and video source links in a new tab"
+  },
+  "openVideoInNewTabMenuItem": {
+    "message": "Open video in new tab"
   }
 }

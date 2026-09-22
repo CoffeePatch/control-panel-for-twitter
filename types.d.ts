@@ -26,6 +26,7 @@ export type Config = {
   timelineWidth: 'default' | '650' | '700' | '750' | '800' | 'full'
   timelineAlignment: 'default' | 'left' | 'center' | 'right'
   showLabels: 'always' | 'hover' | 'never'
+  openSelectedLinksInNewTab: boolean
   removeTimelineBorders: boolean
   removeTweetBorders: boolean
   hideStickyHeader: boolean
@@ -155,6 +156,7 @@ export type LocaleKey =
   | 'MESSAGES'
   | 'MOST_RELEVANT'
   | 'MUTE_THIS_CONVERSATION'
+  | 'OPEN_VIDEO_IN_NEW_TAB'
   | 'POST_ALL'
   | 'POST_UNAVAILABLE'
   | 'PROFILE_SUMMARY'

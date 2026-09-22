@@ -44,13 +44,34 @@ chrome.storage.local.onChanged.addListener((changes) => {
   }
 })
 
-// Listen for download requests from content script
+// Listen for download requests and tab opening from content script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === 'DOWNLOAD_MEDIA') {
     handleDownloadMedia(message, sendResponse)
     return true // async response
   }
+  if (message?.type === 'OPEN_TAB') {
+    handleOpenTab(message)
+  }
 })
+
+function handleOpenTab(message) {
+  let { url, active = false } = message
+  if (typeof url !== 'string' || (!url.startsWith('https://') && !url.startsWith('http://'))) {
+    return
+  }
+  try {
+    let parsed = new URL(url)
+    let host = parsed.hostname.toLowerCase()
+    if (host !== 'twitter.com' && !host.endsWith('.twitter.com') && host !== 'x.com' && !host.endsWith('.x.com')) {
+      console.warn('[CPFT] Unauthorized open tab host:', host)
+      return
+    }
+    chrome.tabs.create({ url, active: Boolean(active) })
+  } catch (e) {
+    console.error('[CPFT] Error opening tab:', e)
+  }
+}
 
 function handleDownloadMedia(message, sendResponse) {
   let { url, filename, subfolder } = message
@@ -62,7 +83,11 @@ function handleDownloadMedia(message, sendResponse) {
   try {
     let parsed = new URL(url)
     let host = parsed.hostname.toLowerCase()
-    if (!host.endsWith('.twimg.com') && !host.endsWith('.twitter.com') && !host.endsWith('.x.com')) {
+    if (
+      host !== 'twimg.com' && !host.endsWith('.twimg.com') &&
+      host !== 'twitter.com' && !host.endsWith('.twitter.com') &&
+      host !== 'x.com' && !host.endsWith('.x.com')
+    ) {
       sendResponse({ success: false, error: 'Unauthorized download host: ' + host })
       return
     }

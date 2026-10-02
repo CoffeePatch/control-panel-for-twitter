@@ -105,6 +105,9 @@
   "downloadVideoQualityLabel": {
     "message": "Preferred video quality"
   },
+  "downloadIconPositionLabel": {
+    "message": "Download button position"
+  },
   "dropdownMenuFontWeightLabel": {
     "message": "Use normal font weight in dropdown menus"
   },

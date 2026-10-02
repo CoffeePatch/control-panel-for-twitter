@@ -176,6 +176,7 @@ const config = {
   downloadFilenameFormat: '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}',
   downloadSubfolder: '',
   downloadVideoQuality: 'highest',
+  downloadIconPosition: 'left',
   // Timeline / Layout
   timelineWidth: 'default',
   timelineAlignment: 'default',
@@ -4720,7 +4721,14 @@ function addDownloadButton($tweetOrContainer) {
   })
 
   $btnContainer.appendChild($btn)
-  $actionBar.appendChild($btnContainer)
+
+  if (config.downloadIconPosition === 'right') {
+    $btnContainer.classList.add('cpft_download_right')
+    $actionBar.appendChild($btnContainer)
+  } else {
+    $btnContainer.classList.add('cpft_download_left')
+    $actionBar.insertBefore($btnContainer, $actionBar.firstChild)
+  }
 }
 
 function tweakMediaModal($modal) {
@@ -6402,6 +6410,12 @@ const configureCss = (() => {
       display: flex;
       align-items: center;
     }
+    .cpft_download_action.cpft_download_left {
+      order: -1;
+    }
+    .cpft_download_action.cpft_download_right {
+      order: 99;
+    }
     .cpft_download_button {
       display: flex;
       align-items: center;
@@ -6461,7 +6475,7 @@ const configureCss = (() => {
     .cpft_download_button.cpft_error {
       color: rgb(244, 33, 46) !important;
     }
-    [aria-modal="true"] > div [role="group"] .cpft_download_button {
+    [aria-modal="true"] :is([role="group"], .cpft_download_action) .cpft_download_button {
       color: rgb(255, 255, 255);
     }
     [aria-modal="true"] article[data-testid="tweet"] .cpft_download_button {
@@ -12355,6 +12369,13 @@ function configChanged(changes) {
   }
   if ('downloadMedia' in changes && !changes.downloadMedia) {
     document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
+  }
+  if ('downloadIconPosition' in changes) {
+    document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
+    let tweets = document.querySelectorAll(Selectors.TWEET)
+    for (let t of tweets) addDownloadButton(t)
+    let modal = document.querySelector('[aria-modal="true"]')
+    if (modal) tweakMediaModal(modal)
   }
   if ('openSelectedLinksInNewTab' in changes && !changes.openSelectedLinksInNewTab) {
     document.querySelectorAll('[data-cpft-menu-item="open-video-in-new-tab"]').forEach(el => el.remove())

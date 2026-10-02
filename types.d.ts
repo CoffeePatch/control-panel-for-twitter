@@ -23,6 +23,7 @@ export type Config = {
   downloadFilenameFormat: string
   downloadSubfolder: string
   downloadVideoQuality: 'highest' | 'lowest'
+  downloadIconPosition: 'left' | 'right'
   // Timeline / Layout
   timelineWidth: 'default' | '650' | '700' | '750' | '800' | 'full'
   timelineAlignment: 'default' | 'left' | 'center' | 'right'

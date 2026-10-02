@@ -84,6 +84,7 @@ for (let translationId of [
   'downloadSubfolderInfo',
   'downloadSubfolderLabel',
   'downloadVideoQualityLabel',
+  'downloadIconPositionLabel',
   'dropdownMenuFontWeightLabel',
   'enabled',
   'experimentsOptionsLabel',
@@ -274,6 +275,7 @@ const defaultConfig = {
   downloadFilenameFormat: '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}',
   downloadSubfolder: '',
   downloadVideoQuality: 'highest',
+  downloadIconPosition: 'left',
   // Timeline / Layout
   timelineWidth: 'default',
   timelineAlignment: 'default',
@@ -1305,6 +1307,9 @@ function main() {
     }
     if (storedConfig.downloadFilenameFormat) {
       storedConfig.downloadFilenameFormat = normalizeFilenameTemplate(storedConfig.downloadFilenameFormat)
+    }
+    if (!storedConfig.downloadIconPosition) {
+      storedConfig.downloadIconPosition = 'left'
     }
     optionsConfig = { ...defaultConfig, ...storedConfig }
 

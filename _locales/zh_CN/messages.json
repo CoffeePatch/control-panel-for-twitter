@@ -487,8 +487,14 @@
   "mediaViewGridOption": {
     "message": "旧版 Twitter"
   },
-  "mediaViewCarouselOption": {
-    "message": "水平轮播"
+  "mediaViewFullOption": {
+    "message": "完整视图"
+  },
+  "enableMediaDragLabel": {
+    "message": "启用媒体拖拽"
+  },
+  "enableMediaDragInfo": {
+    "message": "允许鼠标点击并拖动以水平浏览媒体"
   },
   "tweakNewLayoutInfo": {
     "message": "实验性功能 - 仅在您拥有新布局时启用"

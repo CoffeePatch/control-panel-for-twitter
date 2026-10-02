@@ -475,8 +475,14 @@
   "mediaViewGridOption": {
     "message": "Twitter antiguo"
   },
-  "mediaViewCarouselOption": {
-    "message": "Carrusel horizontal"
+  "mediaViewFullOption": {
+    "message": "Vista completa"
+  },
+  "enableMediaDragLabel": {
+    "message": "Habilitar arrastre de medios"
+  },
+  "enableMediaDragInfo": {
+    "message": "Permitir hacer clic y arrastrar con el ratón para navegar horizontalmente"
   },
   "tweakNewLayoutInfo": {
     "message": "Experimental - solo activar si tienes el nuevo diseño"

@@ -475,8 +475,14 @@
   "mediaViewGridOption": {
     "message": "旧Twitter"
   },
-  "mediaViewCarouselOption": {
-    "message": "水平カルーセル"
+  "mediaViewFullOption": {
+    "message": "全表示"
+  },
+  "enableMediaDragLabel": {
+    "message": "メディアのドラッグを有効化"
+  },
+  "enableMediaDragInfo": {
+    "message": "マウスクリック＆ドラッグでメディアを水平に閲覧できるようにする"
   },
   "tweakNewLayoutInfo": {
     "message": "実験的機能 - 新しいレイアウトがある場合にのみ有効にしてください"

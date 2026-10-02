@@ -40,8 +40,20 @@ chrome.storage.local.get((/** @type {Partial<import("./types").Config>} */ store
   if (storedConfig.twitterBlueChecks == 'dim') {
     storedConfig.twitterBlueChecks = 'replace'
   }
-  if (!storedConfig.mediaView) {
-    storedConfig.mediaView = storedConfig.horizontalMediaCarousel !== false ? 'carousel' : (storedConfig.revertMediaCarousel ? 'grid' : 'default')
+  if (storedConfig.mediaView === 'carousel') {
+    storedConfig.mediaView = 'default'
+    if (storedConfig.enableMediaDrag === undefined) {
+      storedConfig.enableMediaDrag = true
+    }
+  } else if (!storedConfig.mediaView) {
+    if (storedConfig.horizontalMediaCarousel) {
+      storedConfig.mediaView = 'default'
+      storedConfig.enableMediaDrag = true
+    } else if (storedConfig.revertMediaCarousel) {
+      storedConfig.mediaView = 'grid'
+    } else {
+      storedConfig.mediaView = 'default'
+    }
   }
 
   $settings = document.createElement('script')

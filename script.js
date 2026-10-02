@@ -246,9 +246,10 @@ const config = {
   restoreQuoteTweetsLink: true,
   restoreTweetSource: true,
   retweets: 'separate',
-  revertMediaCarousel: true,
-  mediaView: 'carousel',
-  horizontalMediaCarousel: true,
+  revertMediaCarousel: false,
+  mediaView: 'default',
+  enableMediaDrag: false,
+  horizontalMediaCarousel: false,
   revertProfileTabs: false,
   showBlueReplyFollowersCount: false,
   showBlueReplyFollowersCountAmount: '1000000',
@@ -3676,9 +3677,255 @@ async function observeSidebar() {
   })
 }
 
-function observeSideNavItems() {
-  observeSideNavTweetButton()
+function getNavLabelText($el) {
+  let testId = $el.getAttribute('data-testid') || ''
+  let ariaLabel = $el.getAttribute('aria-label') || ''
+  let href = $el.getAttribute('href') || ''
+
+  if (testId === 'AppTabBar_Home_Link' || testId.includes('Home')) return getString('HOME') || 'Home'
+  if (testId === 'AppTabBar_Explore_Link' || testId.includes('Explore')) return 'Explore'
+  if (testId === 'AppTabBar_Notifications_Link' || testId.includes('Notifications')) return 'Notifications'
+  if (testId === 'AppTabBar_DirectMessage_Link' || testId.includes('DirectMessage')) {
+    return href.includes('/i/chat') ? 'Chat' : 'Messages'
+  }
+  if (testId === 'AppTabBar_Profile_Link' || testId.includes('Profile')) return 'Profile'
+  if (testId === 'AppTabBar_More_Menu' || testId.includes('More')) return 'More'
+  if (testId.includes('premium')) return 'Premium'
+  if (testId.includes('Bookmarks')) return 'Bookmarks'
+  if (testId.includes('Lists')) return 'Lists'
+  if (testId.includes('Communities')) return 'Communities'
+
+  if (ariaLabel) {
+    let clean = ariaLabel.replace(/\s*\([^)]*\)/g, '').trim()
+    let lower = clean.toLowerCase()
+    if (lower === 'search and explore') return 'Explore'
+    if (lower === 'more menu items') return 'More'
+    if (lower.startsWith('direct messages')) {
+      return href.includes('/i/chat') ? 'Chat' : 'Messages'
+    }
+    return clean
+  }
+
+  if (href) {
+    let path = href.split('x.com').pop().split('?')[0]
+    if (path === '/home') return 'Home'
+    if (path === '/explore') return 'Explore'
+    if (path === '/notifications') return 'Notifications'
+    if (path === '/i/chat') return 'Chat'
+    if (path === '/i/grok') return 'Grok'
+    if (path === '/i/history') return 'History'
+    if (path.includes('/creators/studio')) return 'Creator Studio'
+    if (path.includes('/premium')) return 'Premium'
+    if (path === '/i/bookmarks') return 'Bookmarks'
+    if (path === '/i/lists') return 'Lists'
+    if (path === '/i/communities') return 'Communities'
+    if (path.includes('/verified-orgs')) return 'Verified Orgs'
+  }
+
+  return ''
 }
+
+function getAccountInfo($accountBtn) {
+  let screenName = getUserScreenName()
+  let $avatarContainer = $accountBtn.querySelector('[data-testid^="UserAvatar-Container-"]')
+  if (!screenName && $avatarContainer) {
+    let testId = $avatarContainer.getAttribute('data-testid') || ''
+    screenName = testId.replace('UserAvatar-Container-', '')
+  }
+  if (!screenName) {
+    let $profileLink = document.querySelector('a[data-testid="AppTabBar_Profile_Link"]')
+    let href = $profileLink?.getAttribute('href') || ''
+    screenName = href.split('x.com').pop().split('/')[1]?.split('?')[0] || ''
+  }
+
+  let displayName = $accountBtn.querySelector('img')?.getAttribute('alt') || ''
+  if (!displayName) {
+    let userEntities = getStateEntities()?.users?.entities
+    if (userEntities && screenName) {
+      displayName = Object.values(userEntities).find((u) => u.screen_name === screenName)?.name || ''
+    }
+  }
+  if (!displayName) displayName = screenName
+
+  return { screenName, displayName }
+}
+
+function syncNavLabels() {
+  if (!desktop) return
+
+  if (config.showLabels === 'never') {
+    document.querySelectorAll('.cpft-nav-label-container, .cpft-tweet-label, .cpft-account-label-container').forEach(($el) => $el.remove())
+    let $injectedTweetSpan = document.querySelector('[data-testid="SideNav_NewTweet_Button"] span[data-cpft-injected="true"]')
+    if ($injectedTweetSpan) {
+      $injectedTweetSpan.textContent = ''
+      delete $injectedTweetSpan.dataset.cpftInjected
+    }
+    return
+  }
+
+  // 1. Navigation items
+  let $navItems = document.querySelectorAll(`${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button)`)
+  for (let $item of $navItems) {
+    let $nativeLabel = $item.querySelector(':scope > div > div[dir]:not([aria-live]):not(.cpft-nav-label-container)')
+    let hasNative = Boolean($nativeLabel && $nativeLabel.textContent?.trim())
+
+    let $extContainer = $item.querySelector('.cpft-nav-label-container')
+    if (hasNative) {
+      if ($extContainer) $extContainer.remove()
+    } else {
+      let labelText = getNavLabelText($item)
+      if (labelText) {
+        if ($extContainer) {
+          let $span = $extContainer.querySelector('.cpft-nav-label')
+          if ($span && $span.textContent !== labelText) {
+            $span.textContent = labelText
+          }
+        } else {
+          let $row = $item.querySelector(':scope > div') || $item
+          let $container = document.createElement('div')
+          $container.className = 'cpft-nav-label-container'
+          $container.setAttribute('dir', 'ltr')
+          let $span = document.createElement('span')
+          $span.className = 'cpft-nav-label'
+          $span.textContent = labelText
+          $container.appendChild($span)
+          $row.appendChild($container)
+        }
+      }
+    }
+  }
+
+  // 2. Tweet button
+  let $tweetBtn = document.querySelector('[data-testid="SideNav_NewTweet_Button"]')
+  if ($tweetBtn) {
+    let $nativeSpan = $tweetBtn.querySelector('span:not(.cpft-tweet-label):not(.cpft-tweet-label *)')
+    let hasNativeSpan = Boolean($nativeSpan && $nativeSpan.textContent?.trim() && $nativeSpan.dataset.cpftInjected !== 'true')
+    let $extTweetLabel = $tweetBtn.querySelector('.cpft-tweet-label')
+
+    if (hasNativeSpan) {
+      if ($extTweetLabel) $extTweetLabel.remove()
+      if (config.replaceLogo) {
+        setTweetButtonText($nativeSpan)
+      }
+    } else {
+      let tweetText = getString(config.replaceLogo ? 'TWEET' : 'POST') || 'Tweet'
+      if ($nativeSpan) {
+        if ($extTweetLabel) $extTweetLabel.remove()
+        if ($nativeSpan.textContent !== tweetText) {
+          $nativeSpan.textContent = tweetText
+        }
+        $nativeSpan.dataset.cpftInjected = 'true'
+      } else {
+        if ($extTweetLabel) {
+          let $span = $extTweetLabel.querySelector('span')
+          if ($span && $span.textContent !== tweetText) {
+            $span.textContent = tweetText
+          }
+        } else {
+          let $spanContainer = document.createElement('span')
+          $spanContainer.className = 'cpft-tweet-label'
+          let $innerSpan = document.createElement('span')
+          $innerSpan.textContent = tweetText
+          $spanContainer.appendChild($innerSpan)
+          let $target = $tweetBtn.querySelector(':scope > div') || $tweetBtn
+          $target.appendChild($spanContainer)
+        }
+      }
+    }
+  }
+
+  // 3. Account switcher
+  let $accountBtn = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]')
+  if ($accountBtn) {
+    let nativeChildrenCount = $accountBtn.querySelectorAll(':scope > div:not(.cpft-account-label-container)').length
+    let $extAccountLabel = $accountBtn.querySelector('.cpft-account-label-container')
+
+    if (nativeChildrenCount > 1) {
+      if ($extAccountLabel) $extAccountLabel.remove()
+    } else {
+      let { screenName, displayName } = getAccountInfo($accountBtn)
+      if (screenName || displayName) {
+        if ($extAccountLabel) {
+          let $nameEl = $extAccountLabel.querySelector('.cpft-account-name')
+          let $handleEl = $extAccountLabel.querySelector('.cpft-account-handle')
+          if ($nameEl && $nameEl.textContent !== displayName) $nameEl.textContent = displayName
+          if ($handleEl && $handleEl.textContent !== `@${screenName}`) $handleEl.textContent = screenName ? `@${screenName}` : ''
+        } else {
+          let $container = document.createElement('div')
+          $container.className = 'cpft-account-label-container'
+
+          let $names = document.createElement('div')
+          $names.className = 'cpft-account-names'
+
+          let $name = document.createElement('div')
+          $name.className = 'cpft-account-name'
+          $name.textContent = displayName || screenName
+
+          let $handle = document.createElement('div')
+          $handle.className = 'cpft-account-handle'
+          $handle.textContent = screenName ? `@${screenName}` : ''
+
+          $names.appendChild($name)
+          if (screenName) $names.appendChild($handle)
+
+          let $more = document.createElement('div')
+          $more.className = 'cpft-account-more'
+
+          let svgNS = 'http://www.w3.org/2000/svg'
+          let $svg = document.createElementNS(svgNS, 'svg')
+          $svg.setAttribute('viewBox', '0 0 24 24')
+          $svg.setAttribute('aria-hidden', 'true')
+          $svg.setAttribute('style', 'width: 18px; height: 18px; fill: currentColor;')
+          let $g = document.createElementNS(svgNS, 'g')
+          let $path = document.createElementNS(svgNS, 'path')
+          $path.setAttribute('d', 'M3 12c0-1.1.9-2 2-2s2 .9 2 2-.9 2-2 2-2-.9-2-2zm9 2c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm7 0c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2z')
+          $g.appendChild($path)
+          $svg.appendChild($g)
+          $more.appendChild($svg)
+
+          $container.appendChild($names)
+          $container.appendChild($more)
+          $accountBtn.appendChild($container)
+        }
+      }
+    }
+  }
+}
+
+const observeSideNavItems = (() => {
+  /** @type {MutationObserver} */
+  let observer
+
+  return async function observeSideNavItems() {
+    if (observer) {
+      observer.disconnect()
+      observer = null
+    }
+
+    if (!desktop) return
+
+    syncNavLabels()
+    observeSideNavTweetButton()
+
+    let $banner = document.querySelector('header[role="banner"]')
+    if (!$banner) {
+      $banner = await getElement('header[role="banner"]', { name: 'header banner', timeout: 3000 }).catch(() => null)
+    }
+    if (!$banner) return
+
+    syncNavLabels()
+
+    observer = observeElement($banner, () => {
+      syncNavLabels()
+    }, {
+      name: 'sidenav banner observer',
+      observers: globalObservers,
+    }, {
+      childList: true,
+      subtree: true,
+    })
+  }
+})()
 
 const observeSideNavTweetButton = (() => {
   /** @type {MutationObserver} */
@@ -3693,16 +3940,17 @@ const observeSideNavTweetButton = (() => {
     if (!desktop || !config.replaceLogo) return
 
     // This element is updated when text is added or removed on resize
-    let $buttonTextContainer = await getElement('a[data-testid="SideNav_NewTweet_Button"] span', {
+    let $buttonTextContainer = await getElement('a[data-testid="SideNav_NewTweet_Button"] span:not(.cpft-tweet-label)', {
       name: 'sidenav tweet button text container',
-    })
+      timeout: 2000,
+    }).catch(() => null)
+    if (!$buttonTextContainer) return
+
     observer = observeElement($buttonTextContainer, () => {
       if ($buttonTextContainer.childElementCount > 0) {
-        let $buttonText = /** @type {HTMLElement} */ ($buttonTextContainer.querySelector('span > span'))
+        let $buttonText = /** @type {HTMLElement} */ ($buttonTextContainer.querySelector('span > span') || $buttonTextContainer)
         if ($buttonText) {
           setTweetButtonText($buttonText)
-        } else {
-          warn('could not find tweet button text')
         }
       }
       if (isSafari && config.replaceLogo) {
@@ -4080,16 +4328,13 @@ function getTweetMetadata($tweet) {
     }).join('').trim()
   }
 
-  let timestamp = null
+  let tweetTimestamp = null
   let timeAttr = $time?.getAttribute('datetime')
   if (timeAttr) {
     let parsed = new Date(timeAttr)
     if (!isNaN(parsed.getTime())) {
-      timestamp = parsed
+      tweetTimestamp = parsed
     }
-  }
-  if (!timestamp) {
-    timestamp = new Date()
   }
 
   return {
@@ -4097,7 +4342,7 @@ function getTweetMetadata($tweet) {
     username: handle || (username ? `@${username}` : '@user'),
     title: title || '',
     tweetId: tweetId || '',
-    timestamp,
+    tweetTimestamp,
   }
 }
 
@@ -4226,7 +4471,8 @@ function normalizeFilenameTemplate(format) {
  * @returns {string}
  */
 function expandTokens(template, metadata = {}) {
-  let d = metadata.timestamp instanceof Date ? metadata.timestamp : (metadata.timestamp ? new Date(metadata.timestamp) : new Date())
+  let sourceDate = metadata.downloadTimestamp ?? metadata.timestamp
+  let d = sourceDate instanceof Date ? sourceDate : (sourceDate ? new Date(sourceDate) : new Date())
   if (isNaN(d.getTime())) d = new Date()
 
   const tokenMap = {
@@ -4290,7 +4536,7 @@ function generateMediaFilename(metadataOrUser, tweetIdOrIndex, indexOrTotal, tot
   let rawTemplate = '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}'
 
   if (typeof metadataOrUser === 'object' && metadataOrUser !== null) {
-    metadata = metadataOrUser
+    metadata = { ...metadataOrUser }
     index = Number(tweetIdOrIndex) || 0
     total = Number(indexOrTotal) || 1
     ext = totalOrExt || 'mp4'
@@ -4310,8 +4556,12 @@ function generateMediaFilename(metadataOrUser, tweetIdOrIndex, indexOrTotal, tot
       tweetId,
       type: mediaType,
       title: '',
-      timestamp: new Date(),
+      downloadTimestamp: new Date(),
     }
+  }
+
+  if (!metadata.downloadTimestamp && !metadata.timestamp) {
+    metadata.downloadTimestamp = new Date()
   }
 
   let template = normalizeFilenameTemplate(rawTemplate)
@@ -4432,9 +4682,14 @@ function addDownloadButton($tweetOrContainer) {
       }
 
       let metadata = getTweetMetadata($tweetOrContainer)
+      let downloadTimestamp = new Date()
       for (let i = 0; i < mediaItems.length; i++) {
         let item = mediaItems[i]
-        let itemMetadata = { ...metadata, type: item.type }
+        let itemMetadata = {
+          ...metadata,
+          type: item.type,
+          downloadTimestamp,
+        }
         let filename = generateMediaFilename(itemMetadata, i, mediaItems.length, item.ext, config.downloadFilenameFormat)
         document.dispatchEvent(new CustomEvent('cpftDownloadMedia', {
           detail: {
@@ -4628,6 +4883,39 @@ function toHighResMediaUrl(url) {
 }
 
 /**
+ * Safely extracts the immediate/current raw image URL from an element or its children.
+ * Used for instant thumbnail rendering before progressive high-res replacement.
+ * @param {HTMLElement|null} $media
+ * @returns {string}
+ */
+function extractRawImageUrl($media) {
+  if (!$media) return ''
+  let $img = $media.matches('img') ? $media : $media.querySelector('img')
+  if ($img) {
+    let currentSrc = $img.currentSrc
+    if (currentSrc && !currentSrc.startsWith('data:')) return currentSrc
+    let src = $img.src
+    if (src && !src.startsWith('data:')) return src
+    let srcAttr = $img.getAttribute('src')
+    if (srcAttr && !srcAttr.startsWith('data:')) return srcAttr
+    let srcset = $img.getAttribute('srcset')
+    if (srcset) {
+      let parts = srcset.split(',').map(s => s.trim().split(' ')[0]).filter(Boolean)
+      if (parts.length > 0 && !parts[0].startsWith('data:')) {
+        return parts[0]
+      }
+    }
+  }
+  let bgEls = [$media, ...Array.from($media.querySelectorAll?.('[style*="background-image"]') || [])]
+  for (let bg of bgEls) {
+    let style = bg?.getAttribute?.('style') || ''
+    let m = style.match(/background-image:\s*url\(['"]?(https?:\/\/[^'"]+)['"]?\)/i)
+    if (m?.[1]) return m[1]
+  }
+  return ''
+}
+
+/**
  * Safely extracts an image URL from an element or its children in high resolution.
  * @param {HTMLElement|null} $media
  * @returns {string}
@@ -4668,18 +4956,26 @@ function extractImageUrl($media) {
  * @returns {HTMLElement|null}
  */
 function findMediaContainerForGroup(mediaItems, $context) {
-  let lca = getLowestCommonAncestor(mediaItems)
+  let lca = getLowestCommonAncestor(mediaItems.map(m => m._cpftPlaceholder || m))
   if (!lca || !isSafeMediaContainer(lca, $context)) {
     return null
   }
 
   let current = lca
+  if (current.classList?.contains('cpft-original-media-hidden')) {
+    return current
+  }
   while (
     current.parentElement &&
     current.parentElement !== $context &&
     current.parentElement !== document.body &&
+    !current.classList?.contains('cpft-original-media-hidden') &&
     isSafeMediaContainer(current.parentElement, $context)
   ) {
+    if (current.parentElement.classList?.contains('cpft-original-media-hidden')) {
+      current = current.parentElement
+      break
+    }
     current = current.parentElement
   }
   return current
@@ -4695,100 +4991,128 @@ function isFullWidthTimeline() {
 }
 
 /**
- * Calculates adaptive carousel dimensions and per-item widths based on aspect ratios.
- * @param {number[]} aspectRatios
- * @param {number} [containerWidth=500]
- * @param {boolean} [forceFullWidth=false]
- * @returns {{trackHeight: number, itemWidths: number[]}}
+ * Attaches a lightweight mouse drag-to-scroll behavior directly to native X ScrollSnap lists.
+ * @param {HTMLElement} $list
  */
-function calculateCarouselDimensions(aspectRatios, containerWidth = 500, forceFullWidth = false) {
-  let count = aspectRatios.length
-  let validRatios = aspectRatios.map(r => (typeof r === 'number' && !isNaN(r) && r > 0) ? r : 1.0)
-  let minAr = Math.min(...validRatios)
-  let maxAr = Math.max(...validRatios)
-  let leadAr = validRatios[0]
-  let gap = 8
-  let totalGaps = (count - 1) * gap
-  let availableWidth = Math.max(100, containerWidth - totalGaps)
-  let sumRatios = validRatios.reduce((a, b) => a + b, 0)
+function attachNativeCarouselDrag($list) {
+  if (!$list || $list._cpftDragAttached) return
+  $list._cpftDragAttached = true
 
-  let isFull = forceFullWidth || isFullWidthTimeline() || containerWidth >= 850
+  let isDown = false
+  let startX = 0
+  let scrollStart = 0
+  let isDragging = false
+  let activePointerId = null
+  const DRAG_THRESHOLD = 5
 
-  // 1. Exactly 2 items: fit natural aspect ratios side-by-side without stretching giant empty black boxes
-  if (count === 2) {
-    let maxHeight = 480
-    let fitHeight = Math.round(availableWidth / sumRatios)
-    let trackHeight = Math.max(260, Math.min(maxHeight, fitHeight))
-    let itemWidths = validRatios.map(ar => Math.round(trackHeight * ar))
-    let totalItemsW = itemWidths[0] + itemWidths[1] + gap
+  $list.classList.add('cpft-native-drag-enabled')
 
-    // If natural widths fit inside containerWidth, use them directly (cards hug photos with zero black bars)
-    if (totalItemsW <= containerWidth) {
-      return { trackHeight, itemWidths }
+  // Prevent browser native HTML5 drag-and-drop on images / links
+  $list.addEventListener('dragstart', (e) => {
+    if (config.enabled && config.mediaView === 'default' && config.enableMediaDrag) {
+      e.preventDefault()
     }
-
-    // If in full-width mode and natural widths exceed containerWidth, scale height down so both fit side-by-side
-    if (isFull) {
-      let scaledHeight = Math.max(220, Math.min(maxHeight, Math.round(availableWidth / sumRatios)))
-      itemWidths = validRatios.map(ar => Math.round(scaledHeight * ar))
-      let diff = containerWidth - (itemWidths[0] + itemWidths[1] + gap)
-      if (diff > 0 && diff <= 6) itemWidths[1] += diff
-      return { trackHeight: scaledHeight, itemWidths }
-    }
-  }
-
-  // 2. Full-width timeline mode with 3-4 items: all images side-by-side without black borders
-  if (isFull && count <= 4) {
-    let maxHeight = 480
-    let fitHeight = Math.round(availableWidth / sumRatios)
-    let trackHeight = Math.max(240, Math.min(maxHeight, fitHeight))
-    let itemWidths = validRatios.map(ar => Math.round(trackHeight * ar))
-    let totalItemsW = itemWidths.reduce((a, b) => a + b, 0) + totalGaps
-
-    // If natural widths fit inside containerWidth, use them directly
-    if (totalItemsW <= containerWidth) {
-      return { trackHeight, itemWidths }
-    }
-
-    // If natural widths exceed containerWidth, scale height down so all fit side-by-side
-    let scaledHeight = Math.max(220, Math.min(maxHeight, Math.round(availableWidth / sumRatios)))
-    itemWidths = validRatios.map(ar => Math.round(scaledHeight * ar))
-    let diff = containerWidth - (itemWidths.reduce((a, b) => a + b, 0) + totalGaps)
-    if (diff > 0 && diff <= count * 3) {
-      itemWidths[itemWidths.length - 1] += diff
-    }
-    return { trackHeight: scaledHeight, itemWidths }
-  }
-
-  // 3. All landscape items on standard timeline: 1 card at a time with swipe/arrow navigation
-  if (minAr >= 1.2) {
-    let trackHeight = Math.max(260, Math.min(440, Math.round(containerWidth / Math.min(leadAr, 1.78))))
-    let itemWidths = validRatios.map(() => containerWidth)
-    return { trackHeight, itemWidths }
-  }
-
-  // 4. Multi-item scrollable/draggable carousel for standard timeline widths (e.g. 600px, 650px, 800px)
-  let targetHeight = Math.max(350, Math.min(480, Math.round(containerWidth * 0.62)))
-
-  let itemWidths = validRatios.map(ar => {
-    let w = Math.round(targetHeight * ar)
-    if (ar < 0.9) {
-      // Portrait: comfortable width showing ~1.5 to 2.2 cards across the container with peek
-      let minW = Math.max(240, Math.round((containerWidth - gap) * 0.42))
-      let maxW = Math.max(minW, Math.round((containerWidth - gap) * 0.62))
-      return Math.min(containerWidth, Math.max(minW, Math.min(maxW, w)))
-    }
-    if (ar <= 1.2) {
-      // Square or near-square
-      let minW = Math.max(260, Math.round((containerWidth - gap) * 0.50))
-      let maxW = Math.max(minW, Math.round((containerWidth - gap) * 0.85))
-      return Math.min(containerWidth, Math.max(minW, Math.min(maxW, w)))
-    }
-    // Landscape item in mixed post
-    return Math.min(containerWidth, Math.max(280, w))
   })
 
-  return { trackHeight: targetHeight, itemWidths }
+  // Real controls that should immediately handle clicks without initiating drag
+  const isExcludedControl = (target) => {
+    if (!target) return false
+    return Boolean(target.closest([
+      'button[aria-label="Next"]',
+      'button[aria-label="Previous"]',
+      '[data-testid*="ScrollSnap-prev"]',
+      '[data-testid*="ScrollSnap-next"]',
+      '[role="slider"]',
+      '[role="progressbar"]',
+      'input[type="range"]',
+      '[data-testid="mute-button"]',
+      'button[aria-label*="Mute"]',
+      'button[aria-label*="Unmute"]',
+      'button[aria-label*="Volume"]',
+      'button[aria-label*="audio"]',
+      'button[aria-label*="Sound"]',
+      'button[aria-label="Pause"]',
+      'button[aria-label*="Fullscreen"]',
+      'button[aria-label*="full screen"]',
+      'button[aria-label*="Playback speed"]',
+      'button[aria-label*="quality"]'
+    ].join(',')))
+  }
+
+  const onDown = (e) => {
+    // Only primary (left) button and when drag is enabled in Default mode
+    if (e.button !== 0 || !config.enabled || config.mediaView !== 'default' || !config.enableMediaDrag) return
+    // Ignore touch / pen pointers to keep native touch swipe intact
+    if (e.pointerType && e.pointerType !== 'mouse') return
+    // Never hijack navigation buttons or specific video control widgets
+    if (isExcludedControl(e.target)) return
+
+    isDown = true
+    isDragging = false
+    activePointerId = e.pointerId ?? null
+    startX = e.clientX ?? e.pageX
+    scrollStart = $list.scrollLeft
+  }
+
+  const onMove = (e) => {
+    if (!isDown) return
+    let currentX = e.clientX ?? e.pageX
+    let dx = currentX - startX
+
+    if (!isDragging) {
+      if (Math.abs(dx) > DRAG_THRESHOLD) {
+        isDragging = true
+        $list.classList.add('cpft-native-dragging')
+        if (activePointerId !== null && typeof $list.setPointerCapture === 'function') {
+          try {
+            $list.setPointerCapture(activePointerId)
+          } catch (_) {}
+        }
+      }
+    }
+
+    if (isDragging) {
+      $list.scrollLeft = scrollStart - dx
+    }
+  }
+
+  const onUp = (e) => {
+    if (!isDown) return
+    isDown = false
+
+    if (activePointerId !== null && typeof $list.releasePointerCapture === 'function') {
+      try {
+        $list.releasePointerCapture(activePointerId)
+      } catch (_) {}
+    }
+    activePointerId = null
+
+    if (isDragging) {
+      isDragging = false
+      $list.classList.remove('cpft-native-dragging')
+      let suppressClick = (clickEvent) => {
+        clickEvent.preventDefault()
+        clickEvent.stopPropagation()
+        clickEvent.stopImmediatePropagation()
+        window.removeEventListener('click', suppressClick, true)
+      }
+      window.addEventListener('click', suppressClick, true)
+      setTimeout(() => window.removeEventListener('click', suppressClick, true), 50)
+    }
+  }
+
+  if (window.PointerEvent) {
+    $list.addEventListener('pointerdown', onDown)
+    $list.addEventListener('pointermove', onMove)
+    $list.addEventListener('pointerup', onUp)
+    $list.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointermove', (e) => { if (isDown && !isDragging) onMove(e) })
+    window.addEventListener('pointerup', (e) => { if (isDown) onUp(e) })
+  } else {
+    $list.addEventListener('mousedown', onDown)
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
 }
 
 /**
@@ -4846,20 +5170,184 @@ function openNativeMedia($media, originalLink, e) {
 }
 
 /**
- * Creates and attaches a horizontal media carousel for a collection of media items.
+ * Restores any reparented video elements from a container back to their original DOM positions.
+ * @param {HTMLElement} container
+ */
+function restoreReparentedVideos(container) {
+  if (!container) return
+  let reparented = container.querySelectorAll('.cpft-reparented-video, [data-testid="videoPlayer"]')
+  for (let el of reparented) {
+    let ph = el._cpftPlaceholder
+    if (ph && ph.parentNode) {
+      ph.parentNode.insertBefore(el, ph)
+      ph.remove()
+    } else if (el._cpftOriginalParent && el._cpftOriginalParent.isConnected) {
+      if (el._cpftOriginalNextSibling && el._cpftOriginalNextSibling.parentNode === el._cpftOriginalParent) {
+        el._cpftOriginalParent.insertBefore(el, el._cpftOriginalNextSibling)
+      } else {
+        el._cpftOriginalParent.appendChild(el)
+      }
+    }
+    el.classList.remove('cpft-reparented-video')
+    delete el._cpftPlaceholder
+    delete el._cpftOriginalParent
+    delete el._cpftOriginalNextSibling
+  }
+}
+
+/**
+ * Reparents a native video player element into a new host container, leaving a placeholder marker in its original position.
+ * @param {HTMLElement} $videoPlayer
+ * @param {HTMLElement} $newHost
+ */
+function reparentVideoPlayer($videoPlayer, $newHost) {
+  if (!$videoPlayer || !$newHost) return
+  if (!$videoPlayer._cpftPlaceholder && $videoPlayer.parentElement) {
+    let $ph = document.createElement('div')
+    $ph.className = 'cpft-video-placeholder'
+    $ph.style.display = 'none'
+    $videoPlayer.parentElement.insertBefore($ph, $videoPlayer)
+    $videoPlayer._cpftPlaceholder = $ph
+    $videoPlayer._cpftOriginalParent = $ph.parentElement
+    $videoPlayer._cpftOriginalNextSibling = $ph.nextSibling
+    $ph._cpftVideoPlayer = $videoPlayer
+  }
+  $videoPlayer.classList.add('cpft-reparented-video')
+  $newHost.appendChild($videoPlayer)
+}
+
+/**
+ * Resolves the matching media entity for a given media item from the tweet's media entities array.
+ * @param {HTMLElement} mediaItem
+ * @param {number} idx
+ * @param {object[]} [mediaEntities]
+ * @returns {object|null}
+ */
+function findMediaEntity(mediaItem, idx, mediaEntities) {
+  if (!mediaEntities || !mediaEntities.length) return null
+  let link = mediaItem.matches('a') ? mediaItem : mediaItem.querySelector('a')
+  let href = link?.getAttribute('href') || ''
+  let match = href.match(/\/photo\/(\d+)/)
+  if (match) {
+    let photoIdx = parseInt(match[1], 10) - 1
+    if (photoIdx >= 0 && photoIdx < mediaEntities.length) {
+      return mediaEntities[photoIdx]
+    }
+  }
+  let img = mediaItem.matches('img') ? mediaItem : mediaItem.querySelector('img')
+  let src = img?.currentSrc || img?.src || ''
+  if (src) {
+    for (let ent of mediaEntities) {
+      if (ent.media_url_https && src.includes(ent.media_url_https.split('/').pop().split('?')[0])) {
+        return ent
+      }
+    }
+  }
+  return mediaEntities[idx] || null
+}
+
+/**
+ * Determines whether an aspect ratio is verified from reliable metadata or loaded element dimensions.
+ * @param {HTMLElement} $media
+ * @param {object} [entity]
+ * @returns {boolean}
+ */
+function hasVerifiedMediaAspectRatio($media, entity) {
+  if (entity?.video_info?.aspect_ratio && Array.isArray(entity.video_info.aspect_ratio)) {
+    let [w, h] = entity.video_info.aspect_ratio
+    if (w && h) return true
+  }
+  let origW = entity?.original_info?.width || entity?.sizes?.large?.w
+  let origH = entity?.original_info?.height || entity?.sizes?.large?.h
+  if (origW && origH) return true
+
+  let video = $media.matches('video') ? $media : $media.querySelector('video')
+  if (video && video.videoWidth && video.videoHeight) return true
+
+  let isVideoMedia = Boolean(
+    video ||
+    $media.matches('[data-testid="videoPlayer"], [data-testid="videoComponent"]') ||
+    $media.querySelector('[data-testid="videoPlayer"], [data-testid="videoComponent"]') ||
+    $media._cpftPlaceholder ||
+    $media._cpftVideoPlayer
+  )
+  if (isVideoMedia) {
+    let spacer = $media.querySelector('[style*="padding-bottom"]')
+    if (spacer && spacer.style.paddingBottom.match(/([\d.]+)%/)) return true
+  }
+
+  let img = $media.matches('img') ? $media : $media.querySelector('img')
+  if (img && img.naturalWidth && img.naturalHeight) return true
+
+  return false
+}
+
+/**
+ * Extracts aspect ratio (width / height) from a media element or its Twitter API entity.
+ * @param {HTMLElement} $media
+ * @param {object} [entity]
+ * @returns {number}
+ */
+function extractMediaAspectRatio($media, entity) {
+  if (entity?.video_info?.aspect_ratio && Array.isArray(entity.video_info.aspect_ratio)) {
+    let [w, h] = entity.video_info.aspect_ratio
+    if (w && h) return w / h
+  }
+  let origW = entity?.original_info?.width || entity?.sizes?.large?.w
+  let origH = entity?.original_info?.height || entity?.sizes?.large?.h
+  if (origW && origH) return origW / origH
+
+  let video = $media.matches('video') ? $media : $media.querySelector('video')
+  if (video && video.videoWidth && video.videoHeight) {
+    return video.videoWidth / video.videoHeight
+  }
+
+  // Native X video containers use intrinsic aspect-ratio spacers (padding-bottom: X%).
+  // This must ONLY be used for video elements, never for photo elements.
+  let isVideoMedia = Boolean(
+    video ||
+    $media.matches('[data-testid="videoPlayer"], [data-testid="videoComponent"]') ||
+    $media.querySelector('[data-testid="videoPlayer"], [data-testid="videoComponent"]') ||
+    $media._cpftPlaceholder ||
+    $media._cpftVideoPlayer
+  )
+  if (isVideoMedia) {
+    let spacer = $media.querySelector('[style*="padding-bottom"]')
+    if (spacer) {
+      let pbMatch = spacer.style.paddingBottom.match(/([\d.]+)%/)
+      if (pbMatch) {
+        let pb = parseFloat(pbMatch[1])
+        if (pb > 0) return 100 / pb
+      }
+    }
+  }
+
+  let img = $media.matches('img') ? $media : $media.querySelector('img')
+  if (img && img.naturalWidth && img.naturalHeight) {
+    return img.naturalWidth / img.naturalHeight
+  }
+
+  return 1.0
+}
+
+/**
+ * Creates and attaches a full-view multi-image grid where every image is completely visible without cropping.
+ * 2 images: [1][2]
+ * 3 images: [1][2] on row 1, [3] on row 2 (spanning both columns)
+ * 4 images: [1][2] on row 1, [3][4] on row 2 (2x2 grid)
  * @param {HTMLElement} $container
  * @param {HTMLElement[]} mediaItems
  * @param {string} tweetId
  */
-function createHorizontalMediaCarousel($container, mediaItems, tweetId) {
+function createFullViewMediaGrid($container, mediaItems, tweetId) {
   let $parent = $container.parentNode
   if (!$parent || !$container.isConnected) return
   if (mediaItems.length < 2) return
 
-  let mediaEntities = tweetId ? tweetMediaCache.get(tweetId) : null
+  let mediaEntities = tweetId ? (tweetMediaCache.get(tweetId) || getTweetInfo(tweetId)?.extended_entities?.media || null) : null
 
   let currentUrls = mediaItems.map((p, idx) => {
-    let entity = mediaEntities && mediaEntities[idx]
+    let entity = findMediaEntity(p, idx, mediaEntities)
     if (entity?.media_url_https) return toHighResMediaUrl(entity.media_url_https)
     let imgUrl = extractImageUrl(p)
     let $video = p.querySelector('video')
@@ -4867,151 +5355,223 @@ function createHorizontalMediaCarousel($container, mediaItems, tweetId) {
   }).join('|')
 
   let hasValidUrls = currentUrls.split('|').some(u => Boolean(u.trim()))
+  let count = mediaItems.length
+
   let $prev = $container.previousElementSibling
-  if ($prev && $prev.classList.contains('cpft-carousel-container')) {
-    if (/** @type {HTMLElement} */ ($prev).dataset.cpftUrls === currentUrls && hasValidUrls) {
+  if ($prev && $prev.classList.contains('cpft-fullview-container')) {
+    let prevCount = Number($prev.dataset.cpftCount || 0)
+    if (prevCount === count) {
+      // Fix #2 & #3: Idempotent processing + in-place updates.
+      // If URLs already match and are valid, do nothing!
+      if ($prev.dataset.cpftUrls === currentUrls && hasValidUrls) {
+        return
+      }
+      // Update in-place on existing DOM nodes:
+      let existingItems = $prev.querySelectorAll('.cpft-fullview-item')
+      for (let i = 0; i < count; i++) {
+        let itemEl = existingItems[i]
+        if (!itemEl) continue
+        let imgEl = itemEl.querySelector('.cpft-fullview-img')
+        let origImg = mediaItems[i]?.matches('img') ? mediaItems[i] : mediaItems[i]?.querySelector?.('img')
+        let entity = findMediaEntity(mediaItems[i], i, mediaEntities)
+        let origW = entity?.original_info?.width || entity?.sizes?.large?.w || origImg?.naturalWidth || 0
+        let origH = entity?.original_info?.height || entity?.sizes?.large?.h || origImg?.naturalHeight || 0
+        let ar = (origW && origH) ? (origW / origH) : 0
+        if (ar > 0 && imgEl && (!imgEl.style.aspectRatio || !imgEl.dataset.verifiedRatio)) {
+          imgEl.style.aspectRatio = `${origW} / ${origH}`
+          imgEl.dataset.verifiedRatio = 'true'
+        }
+        if (count === 3 && i === 2) {
+          itemEl.classList.remove('cpft-fullview-span-all')
+          itemEl.classList.add('cpft-fullview-centered')
+        }
+        if (imgEl && entity?.media_url_https) {
+          let hiResUrl = toHighResMediaUrl(entity.media_url_https)
+          if (hiResUrl && imgEl.src !== hiResUrl) {
+            let hi = new Image()
+            hi.decoding = 'async'
+            hi.onload = () => {
+              if (imgEl.isConnected && hi.src) {
+                imgEl.src = hi.src
+                imgEl.style.visibility = ''
+              }
+            }
+            hi.src = hiResUrl
+          }
+        }
+      }
+      $prev.dataset.cpftUrls = currentUrls
       return
     }
+    restoreReparentedVideos($prev)
+    $prev.remove()
+  } else if ($prev && $prev.classList.contains('cpft-carousel-container')) {
+    restoreReparentedVideos($prev)
     $prev.remove()
   }
 
-  let aspectRatios = []
-  for (let i = 0; i < mediaItems.length; i++) {
-    let ar = 1.0
-    let entity = mediaEntities && mediaEntities[i]
-    let origW = entity?.original_info?.width || entity?.sizes?.large?.w
-    let origH = entity?.original_info?.height || entity?.sizes?.large?.h
-    if (origW && origH) {
-      ar = origW / origH
-    } else {
-      let origImg = mediaItems[i].querySelector('img')
-      if (origImg && origImg.naturalWidth && origImg.naturalHeight) {
-        ar = origImg.naturalWidth / origImg.naturalHeight
-      }
-    }
-    aspectRatios.push(ar)
-  }
+  let $grid = document.createElement('div')
+  $grid.className = 'cpft-fullview-container'
+  $grid.setAttribute('role', 'region')
+  $grid.setAttribute('aria-label', 'Full view media')
+  $grid.dataset.cpftUrls = currentUrls
+  $grid.dataset.cpftCount = String(count)
 
-  let isFull = isFullWidthTimeline()
-  let containerWidth = $parent ? $parent.clientWidth : 0
-  if (!containerWidth || containerWidth < 200) {
-    containerWidth = $container.clientWidth || 0
-  }
-  if (!containerWidth || containerWidth < 200) {
-    let col = document.querySelector(Selectors.PRIMARY_COLUMN)
-    containerWidth = col ? Math.max(200, col.clientWidth - 80) : 500
-  }
-  let { trackHeight, itemWidths } = calculateCarouselDimensions(aspectRatios, containerWidth, isFull)
-
-  let $carousel = document.createElement('div')
-  $carousel.className = 'cpft-carousel-container'
-  $carousel.setAttribute('role', 'region')
-  $carousel.setAttribute('aria-label', 'Media carousel')
-  $carousel.dataset.cpftUrls = currentUrls
-
-  let $track = document.createElement('div')
-  $track.className = 'cpft-carousel-track'
-  $track.style.height = `${trackHeight}px`
-
-  let $badge = document.createElement('div')
-  $badge.className = 'cpft-carousel-badge'
-  $badge.textContent = `1/${mediaItems.length}`
-
-  let $prevBtn = document.createElement('button')
-  $prevBtn.type = 'button'
-  $prevBtn.className = 'cpft-carousel-arrow cpft-carousel-prev'
-  $prevBtn.setAttribute('aria-label', 'Previous')
-  $prevBtn.appendChild(createSvgIcon(CAROUSEL_PREV_PATH))
-  $prevBtn.style.display = 'none'
-
-  let $nextBtn = document.createElement('button')
-  $nextBtn.type = 'button'
-  $nextBtn.className = 'cpft-carousel-arrow cpft-carousel-next'
-  $nextBtn.setAttribute('aria-label', 'Next')
-  $nextBtn.appendChild(createSvgIcon(CAROUSEL_NEXT_PATH))
-  $nextBtn.style.display = 'none'
-
-  let isPointerDown = false
-  let isDragging = false
-  let wasDragged = false
-  let pointerCaptured = false
-  let startX = 0
-  let startY = 0
-  let initialScrollLeft = 0
-  const DRAG_THRESHOLD = 6
-
-  let $items = []
-
-  for (let i = 0; i < mediaItems.length; i++) {
+  for (let i = 0; i < count; i++) {
     let $media = mediaItems[i]
     let originalLink = $media.matches('a') ? $media : ($media.querySelector('a') || $media.closest('a'))
-    let origImg = $media.querySelector('img')
-    let origVideo = $media.querySelector('video')
+    let origImg = $media.matches('img') ? $media : $media.querySelector('img')
+    let origVideo = $media.matches('video') ? $media : $media.querySelector('video')
+    let entity = findMediaEntity($media, i, mediaEntities)
     let isVideo = Boolean(
+      entity?.type === 'video' ||
+      entity?.type === 'animated_gif' ||
       origVideo ||
-      $media.matches('[data-testid="videoPlayer"]') ||
-      $media.querySelector('[data-testid="videoPlayer"]')
+      $media.matches('[data-testid="videoPlayer"], [data-testid="videoComponent"]') ||
+      $media.querySelector('[data-testid="videoPlayer"], [data-testid="videoComponent"]') ||
+      $media._cpftPlaceholder
     )
 
-    let $item = document.createElement('div')
-    $item.className = 'cpft-carousel-item'
-    $item.setAttribute('role', 'group')
-    $item.setAttribute('aria-label', `Media ${i + 1} of ${mediaItems.length}`)
-    $item.style.width = `${itemWidths[i]}px`
-    $item.style.flex = `0 0 ${itemWidths[i]}px`
+    let hasVerifiedAr = hasVerifiedMediaAspectRatio($media, entity)
+    let ar = extractMediaAspectRatio($media, entity)
 
-    let $link = document.createElement('a')
-    $link.className = 'cpft-carousel-link'
-    let href = originalLink?.getAttribute('href') || ''
-    if (href) {
-      $link.href = href
-    } else {
-      $link.setAttribute('role', 'button')
-      $link.setAttribute('tabindex', '0')
+    let $item = document.createElement('div')
+    $item.className = 'cpft-fullview-item'
+    $item.setAttribute('role', 'group')
+    $item.setAttribute('aria-label', `Media ${i + 1} of ${count}`)
+
+    // For 3-media posts, center the 3rd item in the second row
+    if (count === 3 && i === 2) {
+      $item.classList.add('cpft-fullview-centered')
     }
 
     if (isVideo) {
-      let entity = mediaEntities && mediaEntities[i]
-      let poster = toHighResMediaUrl(entity?.media_url_https) || origVideo?.getAttribute('poster') || extractImageUrl($media)
-      if (poster) {
-        let $posterImg = document.createElement('img')
-        $posterImg.className = 'cpft-carousel-img'
-        $posterImg.setAttribute('draggable', 'false')
-        $posterImg.setAttribute('data-cpft-carousel', 'true')
-        $posterImg.src = poster
-        $link.appendChild($posterImg)
+      if (ar > 0) $item.style.aspectRatio = `${ar}`
+      let $vp = $media.matches('[data-testid="videoPlayer"]')
+        ? $media
+        : ($media.querySelector('[data-testid="videoPlayer"]') || $media.closest('[data-testid="videoPlayer"]'))
+      if (!$vp && ($media.matches('video') || $media.querySelector('video'))) {
+        let vTag = $media.matches('video') ? $media : $media.querySelector('video')
+        $vp = vTag?.closest('[data-testid="videoPlayer"]') || vTag?.closest('div[tabindex="0"]') || vTag?.parentElement || vTag
       }
-      let $playBadge = document.createElement('div')
-      $playBadge.className = 'cpft-carousel-play-badge'
-      $playBadge.appendChild(createSvgIcon(CAROUSEL_PLAY_PATH))
-      $link.appendChild($playBadge)
-    } else {
-      let $img = document.createElement('img')
-      $img.className = 'cpft-carousel-img'
-      $img.setAttribute('draggable', 'false')
-      $img.setAttribute('data-cpft-carousel', 'true')
+      if ($vp) {
+        reparentVideoPlayer($vp, $item)
+      } else {
+        let $link = document.createElement('a')
+        $link.className = 'cpft-fullview-link'
+        let href = originalLink?.getAttribute('href') || ''
+        if (href) {
+          $link.href = href
+        } else {
+          $link.setAttribute('role', 'button')
+          $link.setAttribute('tabindex', '0')
+        }
+        let poster = toHighResMediaUrl(entity?.media_url_https) || origVideo?.getAttribute('poster') || extractImageUrl($media)
+        if (poster) {
+          let $posterImg = document.createElement('img')
+          $posterImg.className = 'cpft-fullview-img'
+          $posterImg.setAttribute('draggable', 'false')
+          $posterImg.src = poster
+          if (ar > 0) $posterImg.style.aspectRatio = `${ar}`
+          $link.appendChild($posterImg)
+        }
+        let $playBadge = document.createElement('div')
+        $playBadge.className = 'cpft-carousel-play-badge'
+        $playBadge.appendChild(createSvgIcon(CAROUSEL_PLAY_PATH))
+        $link.appendChild($playBadge)
 
-      let entity = mediaEntities && mediaEntities[i]
-      let imgUrl = toHighResMediaUrl(entity?.media_url_https) || extractImageUrl($media)
-      if (imgUrl) {
-        $img.src = imgUrl
+        $link.addEventListener('click', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          openNativeMedia($media, originalLink, e)
+        })
+        $item.appendChild($link)
+      }
+    } else {
+      let $link = document.createElement('a')
+      $link.className = 'cpft-fullview-link'
+      let href = originalLink?.getAttribute('href') || ''
+      if (href) {
+        $link.href = href
+      } else {
+        $link.setAttribute('role', 'button')
+        $link.setAttribute('tabindex', '0')
+      }
+
+      let $img = document.createElement('img')
+      $img.className = 'cpft-fullview-img'
+      $img.setAttribute('draggable', 'false')
+      $img.decoding = 'async'
+
+      // Instant placeholder: grab the already-cached thumbnail or original src
+      let rawThumb = extractRawImageUrl($media) || origImg?.currentSrc || origImg?.src || ''
+      let highResUrl = toHighResMediaUrl(entity?.media_url_https) || (rawThumb ? toHighResMediaUrl(rawThumb) : '')
+
+      if (rawThumb) {
+        $img.src = rawThumb
+      } else if (highResUrl) {
+        $img.src = highResUrl
       } else {
         $img.style.visibility = 'hidden'
       }
-      $img.alt = origImg?.alt || (entity?.ext_alt_text || '')
 
-      let updateImgSrc = () => {
-        let newUrl = toHighResMediaUrl(entity?.media_url_https) || extractImageUrl($media)
-        if (newUrl && $img.src !== newUrl) {
-          $img.src = newUrl
-          $img.style.visibility = ''
+      // Preload high-res in background and swap seamlessly without blocking initial render:
+      if (highResUrl && highResUrl !== rawThumb) {
+        let hiRes = new Image()
+        hiRes.decoding = 'async'
+        hiRes.onload = () => {
+          if ($img.isConnected && hiRes.src) {
+            $img.src = hiRes.src
+            $img.style.visibility = ''
+          }
+        }
+        hiRes.src = highResUrl
+      }
+
+      $img.alt = origImg?.alt || (entity?.ext_alt_text || '')
+      if (hasVerifiedAr && ar > 0) {
+        $img.style.aspectRatio = `${ar}`
+        $img.dataset.verifiedRatio = 'true'
+      }
+
+      let applyNaturalRatio = (nw, nh) => {
+        if (!nw || !nh) return
+        if (!$img.dataset.verifiedRatio) {
+          $img.style.aspectRatio = `${nw} / ${nh}`
+          $img.dataset.verifiedRatio = 'true'
+          if (count === 3 && i === 2) {
+            $item.classList.add('cpft-fullview-centered')
+          }
         }
       }
 
-      if (!imgUrl) {
+      let updateImgSrc = () => {
+        let newRaw = extractRawImageUrl($media) || origImg?.currentSrc || origImg?.src || ''
+        let newHigh = toHighResMediaUrl(entity?.media_url_https) || (newRaw ? toHighResMediaUrl(newRaw) : '')
+        if (newRaw && !$img.src) {
+          $img.src = newRaw
+          $img.style.visibility = ''
+        }
+        if (newHigh && newHigh !== $img.src) {
+          let hi = new Image()
+          hi.decoding = 'async'
+          hi.onload = () => {
+            if ($img.isConnected) {
+              $img.src = hi.src
+              $img.style.visibility = ''
+            }
+          }
+          hi.src = newHigh
+        }
+        if (origImg?.naturalWidth && origImg?.naturalHeight) {
+          applyNaturalRatio(origImg.naturalWidth, origImg.naturalHeight)
+        }
+      }
+
+      if (!$img.src || $img.style.visibility === 'hidden') {
         let obs = new MutationObserver(() => {
           updateImgSrc()
-          if ($img.src) obs.disconnect()
+          if ($img.src && $img.style.visibility !== 'hidden') obs.disconnect()
         })
         obs.observe($media, { attributes: true, childList: true, subtree: true })
         if (origImg) {
@@ -5020,307 +5580,65 @@ function createHorizontalMediaCarousel($container, mediaItems, tweetId) {
             obs.disconnect()
           }, { once: true })
         }
-      }
-
-      let onImgLoad = () => {
-        let nw = $img.naturalWidth || origImg?.naturalWidth
-        let nh = $img.naturalHeight || origImg?.naturalHeight
-        if (nw && nh) {
-          let ar = nw / nh
-          if (Math.abs(aspectRatios[i] - ar) > 0.05) {
-            aspectRatios[i] = ar
-            let parentW = $parent ? $parent.clientWidth : containerWidth
-            let newDims = calculateCarouselDimensions(aspectRatios, parentW, isFullWidthTimeline())
-            $track.style.height = `${newDims.trackHeight}px`
-            $items.forEach((it, idx) => {
-              it.style.width = `${newDims.itemWidths[idx]}px`
-              it.style.flex = `0 0 ${newDims.itemWidths[idx]}px`
-            })
-            updateScrollUI()
-          }
+      } else if (!hasVerifiedAr && origImg) {
+        if (origImg.naturalWidth && origImg.naturalHeight) {
+          applyNaturalRatio(origImg.naturalWidth, origImg.naturalHeight)
+        } else {
+          origImg.addEventListener('load', () => {
+            if (origImg.naturalWidth && origImg.naturalHeight) {
+              applyNaturalRatio(origImg.naturalWidth, origImg.naturalHeight)
+            }
+          }, { once: true })
         }
       }
-      if ($img.complete && $img.naturalWidth) {
-        onImgLoad()
-      } else {
-        $img.addEventListener('load', onImgLoad)
-      }
-      if (origImg && !origImg.complete) {
-        origImg.addEventListener('load', () => {
-          updateImgSrc()
-          onImgLoad()
-        })
-      }
-      $link.appendChild($img)
-    }
 
-    // Genuine click/tap handling
-    $link.addEventListener('click', (e) => {
-      if (isDragging || wasDragged) {
+      $img.addEventListener('load', () => {
+        if ($img.naturalWidth && $img.naturalHeight) {
+          applyNaturalRatio($img.naturalWidth, $img.naturalHeight)
+        }
+      }, { once: true })
+
+      $link.appendChild($img)
+
+      $link.addEventListener('click', (e) => {
         e.preventDefault()
         e.stopPropagation()
-        return
-      }
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
-        return
-      }
-      e.preventDefault()
-      openNativeMedia($media, originalLink, e)
-    })
-
-    $link.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault()
         openNativeMedia($media, originalLink, e)
-      }
-    })
+      })
 
-    $item.appendChild($link)
-    $track.appendChild($item)
-    $items.push($item)
+      $item.appendChild($link)
+    }
+
+    $grid.appendChild($item)
   }
-
-  // Pointer drag/swipe handling
-  let onPointerDown = (e) => {
-    if (e.pointerType === 'mouse' && e.button !== 0) return
-
-    isPointerDown = true
-    isDragging = false
-    wasDragged = false
-    pointerCaptured = false
-    startX = e.clientX
-    startY = e.clientY
-    initialScrollLeft = $track.scrollLeft
-  }
-
-  let onPointerMove = (e) => {
-    if (!isPointerDown) return
-
-    let dx = e.clientX - startX
-    let dy = e.clientY - startY
-
-    if (!isDragging) {
-      if (Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
-        if (Math.abs(dx) >= Math.abs(dy)) {
-          isDragging = true
-          wasDragged = true
-          $track.classList.add('cpft-is-dragging')
-          $track.style.scrollSnapType = 'none'
-          $track.style.scrollBehavior = 'auto'
-          try {
-            $track.setPointerCapture(e.pointerId)
-            pointerCaptured = true
-          } catch {}
-        } else {
-          // Vertical movement dominates: allow normal page scrolling
-          isPointerDown = false
-          return
-        }
-      }
-    }
-
-    if (isDragging) {
-      e.preventDefault()
-      $track.scrollLeft = initialScrollLeft - dx
-    }
-  }
-
-  let finishDrag = (e) => {
-    if (!isPointerDown) return
-    isPointerDown = false
-
-    if (pointerCaptured) {
-      try {
-        $track.releasePointerCapture(e.pointerId)
-      } catch {}
-      pointerCaptured = false
-    }
-
-    if (isDragging) {
-      isDragging = false
-      $track.classList.remove('cpft-is-dragging')
-      $track.style.scrollSnapType = 'x mandatory'
-      $track.style.scrollBehavior = 'smooth'
-
-      let dx = e.clientX - startX
-      let currentScroll = $track.scrollLeft
-      let targetIndex = 0
-      let minDiff = Infinity
-      for (let idx = 0; idx < $items.length; idx++) {
-        let diff = Math.abs($items[idx].offsetLeft - currentScroll)
-        if (diff < minDiff) {
-          minDiff = diff
-          targetIndex = idx
-        }
-      }
-      if (dx < -30 && targetIndex < $items.length - 1) {
-        targetIndex++
-      } else if (dx > 30 && targetIndex > 0) {
-        targetIndex--
-      }
-      if ($items[targetIndex]) {
-        $track.scrollTo({ left: $items[targetIndex].offsetLeft, behavior: 'smooth' })
-      }
-
-      setTimeout(() => {
-        wasDragged = false
-      }, 120)
-    }
-  }
-
-  $track.addEventListener('pointerdown', onPointerDown)
-  $track.addEventListener('pointermove', onPointerMove)
-  $track.addEventListener('pointerup', finishDrag)
-  $track.addEventListener('pointercancel', finishDrag)
-
-  $track.addEventListener('click', (e) => {
-    if (isDragging || wasDragged) {
-      e.preventDefault()
-      e.stopPropagation()
-      e.stopImmediatePropagation()
-    }
-  }, true)
-
-  $track.addEventListener('dragstart', (e) => e.preventDefault())
-
-  // Scroll UI update for badge and arrows
-  let updateScrollUI = () => {
-    let currentScroll = $track.scrollLeft
-    let clientWidth = $track.clientWidth
-    let maxScroll = $track.scrollWidth - clientWidth
-
-    // When all items fit side-by-side with no scrolling needed:
-    if (maxScroll <= 8) {
-      $prevBtn.style.display = 'none'
-      $nextBtn.style.display = 'none'
-      $badge.style.display = 'none'
-      return
-    }
-    $badge.style.display = 'block'
-
-    let activeIndex = 0
-    let minDiff = Infinity
-    for (let idx = 0; idx < $items.length; idx++) {
-      let diff = Math.abs($items[idx].offsetLeft - currentScroll)
-      if (diff < minDiff) {
-        minDiff = diff
-        activeIndex = idx
-      }
-    }
-
-    // Check how many items are currently visible
-    let visibleIndices = []
-    for (let idx = 0; idx < $items.length; idx++) {
-      let item = $items[idx]
-      let itemLeft = item.offsetLeft - currentScroll
-      let itemRight = itemLeft + item.offsetWidth
-      if (itemLeft >= -10 && itemRight <= clientWidth + 10) {
-        visibleIndices.push(idx + 1)
-      }
-    }
-    if (visibleIndices.length >= $items.length) {
-      $badge.style.display = 'none'
-    } else if (visibleIndices.length > 1) {
-      $badge.style.display = ''
-      $badge.textContent = `${visibleIndices[0]}-${visibleIndices[visibleIndices.length - 1]}/${$items.length}`
-    } else {
-      $badge.style.display = ''
-      $badge.textContent = `${activeIndex + 1}/${$items.length}`
-    }
-
-    $prevBtn.style.display = currentScroll > 10 ? 'flex' : 'none'
-    $nextBtn.style.display = (maxScroll > 10 && currentScroll < maxScroll - 10) ? 'flex' : 'none'
-  }
-
-  $track.addEventListener('scroll', updateScrollUI, { passive: true })
-
-  $prevBtn.addEventListener('click', (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    let currentScroll = $track.scrollLeft
-    let prevOffset = 0
-    for (let item of $items) {
-      if (item.offsetLeft < currentScroll - 10) {
-        prevOffset = item.offsetLeft
-      }
-    }
-    $track.scrollTo({ left: prevOffset, behavior: 'smooth' })
-  })
-
-  $nextBtn.addEventListener('click', (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    let currentScroll = $track.scrollLeft
-    for (let item of $items) {
-      if (item.offsetLeft > currentScroll + 10) {
-        $track.scrollTo({ left: item.offsetLeft, behavior: 'smooth' })
-        return
-      }
-    }
-  })
-
-  $carousel.appendChild($track)
-  $carousel.appendChild($badge)
-  $carousel.appendChild($prevBtn)
-  $carousel.appendChild($nextBtn)
 
   // Visually hide original container while keeping React tree intact
   $container.setAttribute('aria-hidden', 'true')
   $container.classList.add('cpft-original-media-hidden')
   $container.dataset.cpftCarouselAttached = 'true'
-  $parent.insertBefore($carousel, $container)
-
-  // Dynamically update dimensions when container width changes (e.g. full-width toggle or window resize)
-  function updateCarouselDimensions() {
-    if (!$carousel.isConnected) return
-    let parentW = $parent ? $parent.clientWidth : 0
-    if (parentW > 100) {
-      let newDims = calculateCarouselDimensions(aspectRatios, parentW, isFullWidthTimeline())
-      $track.style.height = `${newDims.trackHeight}px`
-      $items.forEach((it, idx) => {
-        it.style.width = `${newDims.itemWidths[idx]}px`
-        it.style.flex = `0 0 ${newDims.itemWidths[idx]}px`
-      })
-      requestAnimationFrame(updateScrollUI)
-    }
-  }
-
-  $carousel._cpftUpdateDims = updateCarouselDimensions
-
-  // Initial scroll UI evaluation
-  requestAnimationFrame(updateScrollUI)
+  $parent.insertBefore($grid, $container)
 }
 
 let carouselResizeTimer = null
 window.addEventListener('resize', () => {
   clearTimeout(carouselResizeTimer)
   carouselResizeTimer = setTimeout(() => {
-    let carousels = document.querySelectorAll('.cpft-carousel-container')
-    for (let c of carousels) {
-      if (typeof c._cpftUpdateDims === 'function') {
-        c._cpftUpdateDims()
-      }
+    let tweets = document.querySelectorAll(Selectors.TWEET)
+    for (let t of tweets) {
+      processSingleVideoMedia(t)
     }
   }, 120)
 }, { passive: true })
 
 
+
 /**
- * Collects distinct media items within a container, excluding nested quote containers.
- * @param {HTMLElement} root
- * @param {HTMLElement[]} excludeContainers
- * @returns {HTMLElement[]}
- */
-/**
- * Helper to check whether horizontal carousel media view is active.
+ * Helper to check whether full-width vertical media view is active.
  * @returns {boolean}
  */
-function isCarouselViewEnabled() {
+function isFullViewEnabled() {
   if (!config.enabled) return false
-  if (config.mediaView) {
-    return config.mediaView === 'carousel'
-  }
-  return Boolean(config.horizontalMediaCarousel)
+  return config.mediaView === 'full'
 }
 
 /**
@@ -5332,6 +5650,8 @@ function isCarouselViewEnabled() {
 function collectMediaItems(root, excludeContainers = []) {
   if (!root) return []
 
+  let isExtensionMedia = (el) => Boolean(el?.closest?.('.cpft-carousel-container, .cpft-fullview-container'))
+
   // 1. Collect video players (deduplicating nested players and shared video containers)
   let videoCandidates = Array.from(root.querySelectorAll('[data-testid="videoPlayer"]'))
   if (videoCandidates.length === 0) {
@@ -5340,6 +5660,7 @@ function collectMediaItems(root, excludeContainers = []) {
   }
   let videos = []
   for (let v of videoCandidates) {
+    if (isExtensionMedia(v)) continue
     if (excludeContainers.some(c => c.contains(v))) continue
     if (videos.some(existing => existing.contains(v) || v.contains(existing))) continue
     if (videos.some(existing => {
@@ -5350,12 +5671,22 @@ function collectMediaItems(root, excludeContainers = []) {
     videos.push(v)
   }
 
+  let placeholders = Array.from(root.querySelectorAll('.cpft-video-placeholder'))
+  for (let ph of placeholders) {
+    if (excludeContainers.some(c => c.contains(ph))) continue
+    let vp = ph._cpftVideoPlayer
+    if (vp && !videos.includes(vp)) {
+      videos.push(vp)
+    }
+  }
+
   // 2. Collect photos: matches both [data-testid="tweetPhoto"] and photo links with images
   let photoCandidates = Array.from(root.querySelectorAll(
     '[data-testid="tweetPhoto"], a[href*="/photo/"]'
   ))
   let normalizedPhotos = []
   for (let cand of photoCandidates) {
+    if (isExtensionMedia(cand)) continue
     let p = cand.matches('[data-testid="tweetPhoto"]')
       ? cand
       : (cand.closest('[data-testid="tweetPhoto"]') || cand)
@@ -5366,15 +5697,11 @@ function collectMediaItems(root, excludeContainers = []) {
 
   // Filter out any photo candidate that is part of a video or contains a video
   let photos = normalizedPhotos.filter(p => {
+    if (isExtensionMedia(p)) return false
     if (excludeContainers.some(c => c.contains(p))) return false
-    if (p.querySelector('video, [data-testid="videoPlayer"]')) return false
-    if (p.closest('[data-testid="videoPlayer"]')) return false
-    if (videos.some(v => v.contains(p) || p.contains(v))) return false
-    if (videos.some(v => {
-      let vParent = v.parentElement
-      let pParent = p.parentElement
-      return vParent && pParent && (vParent === pParent || vParent.contains(p) || pParent.contains(v))
-    })) return false
+    if (p.querySelector('video, [data-testid="videoPlayer"], .cpft-video-placeholder')) return false
+    if (p.closest('[data-testid="videoPlayer"], .cpft-video-placeholder')) return false
+    if (videos.some(v => v.contains(p) || p.contains(v) || (v._cpftPlaceholder && (v._cpftPlaceholder.contains(p) || p.contains(v._cpftPlaceholder))))) return false
     return !normalizedPhotos.some(other => other !== p && other.contains(p))
   })
 
@@ -5393,7 +5720,15 @@ function collectMediaItems(root, excludeContainers = []) {
     uniquePhotos.push(p)
   }
 
-  return [...uniquePhotos, ...videos]
+  let allMedia = [...uniquePhotos, ...videos]
+  allMedia.sort((a, b) => {
+    let posA = a._cpftPlaceholder || a
+    let posB = b._cpftPlaceholder || b
+    if (posA === posB) return 0
+    return (posA.compareDocumentPosition(posB) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1
+  })
+
+  return allMedia
 }
 
 /**
@@ -5402,8 +5737,20 @@ function collectMediaItems(root, excludeContainers = []) {
  */
 function teardownSectionCarousel($section) {
   if (!$section) return
+  if ($section._cpftVideoMountObserver) {
+    $section._cpftVideoMountObserver.disconnect()
+    delete $section._cpftVideoMountObserver
+  }
   let existingCarousels = $section.querySelectorAll('.cpft-carousel-container')
-  for (let c of existingCarousels) c.remove()
+  for (let c of existingCarousels) {
+    restoreReparentedVideos(c)
+    c.remove()
+  }
+  let existingStacks = $section.querySelectorAll('.cpft-fullview-container')
+  for (let s of existingStacks) {
+    restoreReparentedVideos(s)
+    s.remove()
+  }
   let hiddenContainers = $section.querySelectorAll('.cpft-original-media-hidden')
   for (let h of hiddenContainers) {
     h.classList.remove('cpft-original-media-hidden')
@@ -5431,7 +5778,7 @@ function processMediaSection(sectionRoot, excludeContainers, $tweet) {
   if (!sectionRoot || !sectionRoot.isConnected) return
 
   let { tweetId } = getTweetMetadata(sectionRoot) || getTweetMetadata($tweet) || {}
-  let mediaEntities = tweetId ? tweetMediaCache.get(tweetId) : null
+  let mediaEntities = tweetId ? (tweetMediaCache.get(tweetId) || getTweetInfo(tweetId)?.extended_entities?.media || null) : null
 
   // If Twitter's API indicates this tweet only has 1 media item, it MUST remain completely native.
   if (mediaEntities && mediaEntities.length < 2) {
@@ -5441,9 +5788,52 @@ function processMediaSection(sectionRoot, excludeContainers, $tweet) {
 
   let mediaItems = collectMediaItems(sectionRoot, excludeContainers)
 
-  // Must have 2 or more distinct media items to form a carousel!
+  // If Twitter API entities indicate video items exist, wait for native video players to mount:
+  let expectedVideoCount = mediaEntities ? mediaEntities.filter(e => e.type === 'video' || e.type === 'animated_gif').length : 0
+  let collectedVideoCount = mediaItems.filter(m => m.matches('[data-testid="videoPlayer"], video') || m.querySelector('[data-testid="videoPlayer"], video') || m._cpftPlaceholder).length
+
+  if (expectedVideoCount > 0 && collectedVideoCount < expectedVideoCount) {
+    if (!sectionRoot._cpftVideoMountObserver) {
+      let timeoutId = setTimeout(() => {
+        if (sectionRoot._cpftVideoMountObserver) {
+          sectionRoot._cpftVideoMountObserver.disconnect()
+          delete sectionRoot._cpftVideoMountObserver
+          processMediaSection(sectionRoot, excludeContainers, $tweet)
+        }
+      }, 1200)
+
+      let observer = new MutationObserver(() => {
+        let vps = sectionRoot.querySelectorAll('[data-testid="videoPlayer"], video')
+        if (vps.length >= expectedVideoCount) {
+          clearTimeout(timeoutId)
+          observer.disconnect()
+          delete sectionRoot._cpftVideoMountObserver
+          processMediaSection(sectionRoot, excludeContainers, $tweet)
+        }
+      })
+      observer.observe(sectionRoot, { childList: true, subtree: true })
+      sectionRoot._cpftVideoMountObserver = observer
+    }
+    return
+  }
+  if (sectionRoot._cpftVideoMountObserver) {
+    sectionRoot._cpftVideoMountObserver.disconnect()
+    delete sectionRoot._cpftVideoMountObserver
+  }
+
+  // Must have 2 or more distinct media items to form a carousel or full width stack!
   // Single image or single video tweets MUST remain completely native.
   if (mediaItems.length < 2) {
+    // Distinguish Situation A (temporary incomplete DOM during virtualization recycling)
+    // from Situation B (tweet genuinely changed to 1 media item):
+    let existingGrid = sectionRoot.querySelector('.cpft-fullview-container')
+    let hiddenOriginal = sectionRoot.querySelector('.cpft-original-media-hidden')
+    if (existingGrid && hiddenOriginal) {
+      let isVerifiedMulti = mediaEntities ? mediaEntities.length >= 2 : Number(existingGrid.dataset.cpftCount || 0) >= 2
+      if (isVerifiedMulti) {
+        return
+      }
+    }
     teardownSectionCarousel(sectionRoot)
     return
   }
@@ -5451,31 +5841,228 @@ function processMediaSection(sectionRoot, excludeContainers, $tweet) {
   let $container = findMediaContainerForGroup(mediaItems, sectionRoot)
   if (!$container || !$container.isConnected) return
 
-  createHorizontalMediaCarousel($container, mediaItems, tweetId)
+  if (isFullViewEnabled()) {
+    createFullViewMediaGrid($container, mediaItems, tweetId)
+  } else {
+    teardownSectionCarousel(sectionRoot)
+  }
 }
 
 /**
- * Processes a tweet element to convert multi-image/media posts into a horizontal carousel.
+ * Processes a tweet element to convert multi-image/media posts into a horizontal carousel or full-view grid.
  * @param {HTMLElement} $tweet
  */
 function processTweetMediaCarousel($tweet) {
-  if (!isCarouselViewEnabled()) {
+  if (!$tweet || !$tweet.isConnected) return
+
+  if (isFullViewEnabled()) {
+    let quoteContainers = getNestedQuoteContainers($tweet)
+    // 1. Process outer tweet media
+    processMediaSection($tweet, quoteContainers, $tweet)
+    // 2. Process each quote tweet media independently
+    for (let quoteContainer of quoteContainers) {
+      processMediaSection(quoteContainer, [], $tweet)
+    }
+  } else {
     teardownTweetCarousel($tweet)
-    return
+    if (config.enabled && config.mediaView === 'default' && config.enableMediaDrag) {
+      let scrollLists = $tweet.querySelectorAll('[data-testid="ScrollSnap-List"]')
+      for (let list of scrollLists) {
+        attachNativeCarouselDrag(list)
+        list.classList.add('cpft-native-drag-enabled')
+      }
+    }
   }
 
+  // 3. Process single vertical/tall video sizing
+  processSingleVideoMedia($tweet)
+}
+
+/**
+ * Constrains a single video section so vertical/tall videos do not expand to excessive viewport heights.
+ * @param {HTMLElement} sectionRoot
+ * @param {HTMLElement[]} [excludeContainers]
+ */
+function processSingleVideoSection(sectionRoot, excludeContainers = []) {
+  if (!sectionRoot || !sectionRoot.isConnected) return
+
+  // Do not affect media inside an extension carousel or full-view grid
+  if (sectionRoot.closest('.cpft-carousel-container, .cpft-fullview-container')) return
+
+  let { tweetId } = getTweetMetadata(sectionRoot) || {}
+  let mediaEntities = tweetId ? tweetMediaCache.get(tweetId) : null
+
+  // If Twitter API says there are 2 or more media items, this is not a single video post
+  if (mediaEntities && mediaEntities.length > 1) return
+
+  // Collect video players in this sectionRoot, excluding nested quote containers
+  let videoCandidates = Array.from(sectionRoot.querySelectorAll('[data-testid="videoPlayer"], [data-testid="videoComponent"], video'))
+    .filter(v => !excludeContainers.some(c => c.contains(v)) && !v.closest('.cpft-carousel-container, .cpft-fullview-container'))
+
+  if (videoCandidates.length === 0) return
+
+  let videos = []
+  for (let v of videoCandidates) {
+    let normalized = v.closest('[data-testid="videoPlayer"]') || v.closest('[data-testid="videoComponent"]') || v
+    if (videos.some(existing => existing.contains(normalized) || normalized.contains(existing))) continue
+    videos.push(normalized)
+  }
+
+  // Must be exactly one video player
+  if (videos.length !== 1) return
+  let $videoPlayer = videos[0]
+
+  // Check if there are separate photos (not part of the video player itself)
+  let photoLinks = Array.from(sectionRoot.querySelectorAll('a[href*="/photo/"]'))
+    .filter(a => !excludeContainers.some(c => c.contains(a)) && !a.closest('.cpft-carousel-container, .cpft-fullview-container'))
+  if (photoLinks.length > 1) return
+
+  let photoContainers = Array.from(sectionRoot.querySelectorAll('[data-testid="tweetPhoto"]'))
+    .filter(p => !excludeContainers.some(c => c.contains(p)) && !p.closest('.cpft-carousel-container, .cpft-fullview-container'))
+  let separatePhotos = photoContainers.filter(p => !p.querySelector('[data-testid="videoPlayer"], [data-testid="videoComponent"], video') && !p.closest('[data-testid="videoPlayer"], [data-testid="videoComponent"]'))
+  if (separatePhotos.length > 0) return
+
+  // Determine aspect ratio (width / height)
+  let ar = 0
+
+  // 1. From Twitter API media entity
+  if (mediaEntities && mediaEntities[0]) {
+    let entity = mediaEntities[0]
+    let [num, den] = entity.video_info?.aspect_ratio || []
+    if (num && den) {
+      ar = num / den
+    } else if (entity.original_info?.width && entity.original_info?.height) {
+      ar = entity.original_info.width / entity.original_info.height
+    }
+  }
+
+  // 2. From Twitter's spacer div style="padding-bottom: X%"
+  let $tweetPhoto = $videoPlayer.closest('[data-testid="tweetPhoto"]')
+  if (!ar) {
+    let $spacer = $videoPlayer.querySelector('div[style*="padding-bottom"]') ||
+                  $tweetPhoto?.querySelector('div[style*="padding-bottom"]') ||
+                  $videoPlayer.parentElement?.querySelector('div[style*="padding-bottom"]')
+    if ($spacer) {
+      let match = $spacer.style.paddingBottom.match(/([\d.]+)%/)
+      if (match) {
+        let percent = parseFloat(match[1])
+        if (percent > 0) {
+          ar = 100 / percent
+        }
+      }
+    }
+  }
+
+  // 3. From HTML5 video element
+  let $video = $videoPlayer.querySelector('video') || sectionRoot.querySelector('video')
+  if (!ar && $video && $video.videoWidth && $video.videoHeight) {
+    ar = $video.videoWidth / $video.videoHeight
+  }
+
+  // If still unknown, listen once for loadedmetadata
+  if (!ar && $video) {
+    $video.addEventListener('loadedmetadata', () => {
+      if ($video.videoWidth && $video.videoHeight) {
+        processSingleVideoSection(sectionRoot, excludeContainers)
+      }
+    }, { once: true })
+  }
+
+  if (ar <= 0) return
+
+  let arValue = Number(ar.toFixed(4))
+  if ($videoPlayer.dataset.cpftSingleVideoProcessed === String(arValue)) {
+    return
+  }
+  $videoPlayer.dataset.cpftSingleVideoProcessed = String(arValue)
+
+  // Find target elements to constrain: the media card and any wrappers up to mediaSection
+  let $mediaSection = $videoPlayer.closest('div[id][aria-labelledby]')
+  if ($mediaSection === sectionRoot) $mediaSection = null
+
+  let $card = $videoPlayer.closest('.r-1867qdf') ||
+              $videoPlayer.closest('[style*="aspect-ratio"]') ||
+              $tweetPhoto?.parentElement?.parentElement ||
+              $tweetPhoto?.parentElement ||
+              $videoPlayer.parentElement
+
+  let targets = []
+  if ($mediaSection) targets.push($mediaSection)
+
+  let cur = $card
+  while (cur && cur !== sectionRoot && cur !== $mediaSection) {
+    targets.push(cur)
+    if (cur.parentElement === $mediaSection) break
+    cur = cur.parentElement
+  }
+
+  targets = Array.from(new Set(targets.filter(Boolean)))
+  let maxWidthFormula = `min(calc(min(70vh, 650px) * ${arValue}), 100%)`
+
+  for (let el of targets) {
+    el.classList.add('cpft-single-video-card')
+    el.style.setProperty('--cpft-video-ar', String(arValue))
+    el.style.setProperty('max-width', maxWidthFormula, 'important')
+    el.style.setProperty('width', '100%', 'important')
+    el.style.setProperty('margin-left', '0', 'important')
+    el.style.setProperty('margin-right', '0', 'important')
+    el.style.setProperty('align-self', 'flex-start', 'important')
+  }
+}
+
+/**
+ * Observes a tweet to detect late-mounted video players (lazy-loading / virtualization).
+ * @param {HTMLElement} $tweet
+ */
+function observeSingleVideoInTweet($tweet) {
+  if (!$tweet || !$tweet.isConnected || $tweet.dataset.cpftVideoObserved) return
+  $tweet.dataset.cpftVideoObserved = 'true'
+
+  let observer = new MutationObserver((mutations) => {
+    let shouldProcess = false
+    for (let m of mutations) {
+      if (m.addedNodes.length > 0) {
+        for (let n of m.addedNodes) {
+          if (n.nodeType === 1 && (
+            n.matches?.('[data-testid="videoPlayer"], [data-testid="videoComponent"], video') ||
+            n.querySelector?.('[data-testid="videoPlayer"], [data-testid="videoComponent"], video')
+          )) {
+            shouldProcess = true
+            break
+          }
+        }
+      }
+      if (shouldProcess) break
+    }
+    if (shouldProcess) {
+      processSingleVideoMedia($tweet)
+    }
+  })
+
+  observer.observe($tweet, { childList: true, subtree: true })
+}
+
+/**
+ * Processes a tweet element to constrain single vertical/tall videos across all modes.
+ * @param {HTMLElement} $tweet
+ */
+function processSingleVideoMedia($tweet) {
   if (!$tweet || !$tweet.isConnected) return
 
   let quoteContainers = getNestedQuoteContainers($tweet)
 
-  // 1. Process outer tweet media
-  processMediaSection($tweet, quoteContainers, $tweet)
-
-  // 2. Process each quote tweet media independently
+  // 1. Process quote tweet media independently
   for (let quoteContainer of quoteContainers) {
-    processMediaSection(quoteContainer, [], $tweet)
+    processSingleVideoSection(quoteContainer, [])
   }
+
+  // 2. Process outer tweet media
+  processSingleVideoSection($tweet, quoteContainers)
+
+  // 3. Ensure late-mounting video players are observed
+  observeSingleVideoInTweet($tweet)
 }
+
 //#endregion
 
 //#region Tweak functions
@@ -5886,114 +6473,106 @@ const configureCss = (() => {
     }
     `)
 
-    if (isCarouselViewEnabled()) {
+    if (config.enableMediaDrag) {
       cssRules.push(`
-      /* Prevent global horizontal scrollbar on viewport */
-      html, body {
-        max-width: 100% !important;
-        overflow-x: clip !important;
-      }
-
-      /* Horizontal media carousel */
-      .cpft-carousel-container {
-        position: relative !important;
-        width: fit-content !important;
-        max-width: 100% !important;
-        min-width: 0 !important;
-        margin-top: 12px !important;
-        border-radius: 16px !important;
-        overflow: hidden !important;
-        background-color: transparent !important;
-        box-sizing: border-box !important;
-        contain: paint !important;
-      }
-
-      .cpft-carousel-track {
-        position: relative !important;
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        scroll-snap-type: x mandatory !important;
-        scroll-behavior: smooth !important;
-        gap: 8px !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        width: fit-content !important;
-        max-width: 100% !important;
-        min-width: 0 !important;
-        box-sizing: border-box !important;
-        -webkit-overflow-scrolling: touch !important;
-        touch-action: pan-y pinch-zoom !important;
-        scrollbar-width: none !important;
-        -ms-overflow-style: none !important;
+      /* Native X carousel mouse drag */
+      [data-testid="ScrollSnap-List"].cpft-native-drag-enabled {
         cursor: grab !important;
         user-select: none !important;
         -webkit-user-select: none !important;
       }
-
-      .cpft-carousel-track::-webkit-scrollbar {
-        display: none !important;
+      [data-testid="ScrollSnap-List"].cpft-native-drag-enabled img,
+      [data-testid="ScrollSnap-List"].cpft-native-drag-enabled a {
+        -webkit-user-drag: none !important;
+        user-drag: none !important;
       }
-
-      .cpft-carousel-track.cpft-is-dragging {
+      [data-testid="ScrollSnap-List"].cpft-native-dragging {
         cursor: grabbing !important;
         scroll-snap-type: none !important;
         scroll-behavior: auto !important;
         user-select: none !important;
         -webkit-user-select: none !important;
       }
+      [data-testid="ScrollSnap-List"].cpft-native-dragging * {
+        user-select: none !important;
+        -webkit-user-select: none !important;
+        pointer-events: none !important;
+      }
+      `)
+    }
 
-      .cpft-carousel-item {
-        height: 100% !important;
-        scroll-snap-align: start !important;
-        scroll-snap-stop: normal !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
+    if (isFullViewEnabled()) {
+      cssRules.push(`
+      /* Full View multi-image grid (multi-image posts in full view) */
+      .cpft-fullview-container {
         position: relative !important;
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 8px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-top: 12px !important;
+        box-sizing: border-box !important;
+        align-items: start !important;
+      }
+
+      .cpft-fullview-item {
+        position: relative !important;
+        width: 100% !important;
+        max-width: 100% !important;
         border-radius: 16px !important;
         overflow: hidden !important;
         border: 1px solid rgb(207, 217, 222) !important;
         background-color: rgba(0, 0, 0, 0.02) !important;
         box-sizing: border-box !important;
+        display: block !important;
       }
 
-      body.LightsOut .cpft-carousel-item,
-      body.Dark .cpft-carousel-item {
+      .cpft-fullview-container[data-cpft-count="3"] > .cpft-fullview-item:nth-child(3),
+      .cpft-fullview-item.cpft-fullview-centered {
+        grid-column: 1 / -1 !important;
+        justify-self: center !important;
+        width: calc(50% - 4px) !important;
+        max-width: 100% !important;
+      }
+
+      body.LightsOut .cpft-fullview-item,
+      body.Dark .cpft-fullview-item {
         border-color: rgb(47, 51, 54) !important;
         background-color: rgba(255, 255, 255, 0.03) !important;
       }
 
-      .cpft-carousel-link {
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
+      body.Dim .cpft-fullview-item {
+        border-color: rgb(56, 68, 77) !important;
+        background-color: rgba(255, 255, 255, 0.03) !important;
+      }
+
+      .cpft-fullview-link {
+        display: block !important;
         width: 100% !important;
-        height: 100% !important;
+        height: auto !important;
         text-decoration: none !important;
         outline: none !important;
         cursor: pointer !important;
         border: none !important;
         margin: 0 !important;
         padding: 0 !important;
+        line-height: 0 !important;
       }
 
-      .cpft-carousel-img {
-        max-width: 100% !important;
-        max-height: 100% !important;
-        width: 100% !important;
-        height: 100% !important;
-        object-fit: cover !important;
+      .cpft-fullview-img {
         display: block !important;
+        width: 100% !important;
+        height: auto !important;
+        max-height: 85vh !important;
+        object-fit: contain !important;
+        border-radius: 16px !important;
+        user-select: none !important;
+        -webkit-user-drag: none !important;
         pointer-events: none !important;
-        border: none !important;
-        margin: auto !important;
       }
 
-      .cpft-carousel-play-badge {
+      .cpft-fullview-link .cpft-carousel-play-badge {
         position: absolute !important;
         top: 50% !important;
         left: 50% !important;
@@ -6011,76 +6590,22 @@ const configureCss = (() => {
         transition: transform 0.15s ease, background-color 0.15s ease !important;
       }
 
-      .cpft-carousel-link:hover .cpft-carousel-play-badge {
+      .cpft-fullview-link:hover .cpft-carousel-play-badge {
         background: rgba(29, 155, 240, 0.9) !important;
         transform: translate(-50%, -50%) scale(1.08) !important;
       }
 
-      .cpft-carousel-play-badge svg {
+      .cpft-fullview-link .cpft-carousel-play-badge svg {
         width: 24px !important;
         height: 24px !important;
         fill: #ffffff !important;
         margin-left: 2px !important;
       }
+      `)
+    }
 
-      .cpft-carousel-badge {
-        position: absolute !important;
-        top: 12px !important;
-        right: 12px !important;
-        background: rgba(0, 0, 0, 0.65) !important;
-        color: #ffffff !important;
-        font-size: 12px !important;
-        font-weight: 600 !important;
-        line-height: 1 !important;
-        padding: 5px 9px !important;
-        border-radius: 12px !important;
-        pointer-events: none !important;
-        z-index: 2 !important;
-        backdrop-filter: blur(4px) !important;
-        letter-spacing: 0.5px !important;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-        transition: opacity 0.2s ease !important;
-      }
-
-      .cpft-carousel-arrow {
-        position: absolute !important;
-        top: 50% !important;
-        transform: translateY(-50%) !important;
-        width: 32px !important;
-        height: 32px !important;
-        border-radius: 50% !important;
-        background: rgba(15, 20, 25, 0.75) !important;
-        border: none !important;
-        outline: none !important;
-        color: #ffffff !important;
-        display: flex;
-        align-items: center !important;
-        justify-content: center !important;
-        cursor: pointer !important;
-        z-index: 3 !important;
-        backdrop-filter: blur(4px) !important;
-        transition: opacity 0.2s ease, background-color 0.2s ease !important;
-        padding: 0 !important;
-      }
-
-      .cpft-carousel-arrow:hover {
-        background: rgba(15, 20, 25, 0.9) !important;
-      }
-
-      .cpft-carousel-arrow svg {
-        width: 18px !important;
-        height: 18px !important;
-        fill: currentColor !important;
-      }
-
-      .cpft-carousel-prev {
-        left: 8px !important;
-      }
-
-      .cpft-carousel-next {
-        right: 8px !important;
-      }
-
+    if (isFullViewEnabled()) {
+      cssRules.push(`
       .cpft-original-media-hidden {
         position: absolute !important;
         width: 0 !important;
@@ -6096,8 +6621,64 @@ const configureCss = (() => {
         clip-path: inset(50%) !important;
         pointer-events: none !important;
       }
-    `)
+
+      .cpft-fullview-item [data-testid="videoPlayer"] {
+        position: absolute !important;
+        inset: 0 !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        max-width: 100% !important;
+        max-height: 100% !important;
+        border-radius: 16px !important;
+        overflow: hidden !important;
+      }
+      `)
     }
+
+    cssRules.push(`
+    /* Single vertical/tall video sizing across all media-view modes */
+    .cpft-single-video-card {
+      --cpft-max-video-height: min(70vh, 650px);
+      max-width: min(calc(var(--cpft-max-video-height) * var(--cpft-video-ar, 1)), 100%) !important;
+      width: 100% !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      align-self: flex-start !important;
+    }
+    body ${Selectors.PRIMARY_COLUMN} .cpft-single-video-card,
+    body:not(.Search) ${Selectors.PRIMARY_COLUMN} .cpft-single-video-card,
+    body ${Selectors.PRIMARY_COLUMN} ${Selectors.TWEET} div[id][aria-labelledby].cpft-single-video-card,
+    body:not(.Search) ${Selectors.PRIMARY_COLUMN} ${Selectors.TWEET} div[id][aria-labelledby].cpft-single-video-card {
+      --cpft-max-video-height: min(70vh, 650px);
+      max-width: min(calc(var(--cpft-max-video-height) * var(--cpft-video-ar, 1)), 100%) !important;
+      width: 100% !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      align-self: flex-start !important;
+    }
+    .cpft-single-video-card [data-testid="tweetPhoto"],
+    .cpft-single-video-card [data-testid="videoPlayer"],
+    .cpft-single-video-card [data-testid="videoComponent"] {
+      max-width: 100% !important;
+      width: 100% !important;
+      height: 100% !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+    :fullscreen .cpft-single-video-card,
+    .cpft-single-video-card:fullscreen,
+    .cpft-single-video-card [data-testid="videoPlayer"]:fullscreen,
+    .cpft-single-video-card video:fullscreen {
+      max-width: 100vw !important;
+      max-height: 100vh !important;
+      width: 100vw !important;
+      height: 100vh !important;
+    }
+    `)
  
     if (config.autoExpandCaptions) {
       cssRules.push(`
@@ -6827,6 +7408,11 @@ const configureCss = (() => {
           header[role="banner"] > div > div > div {
             width: ${navWidth} !important;
             overflow: visible !important;
+            box-sizing: border-box !important;
+          }
+          header[role="banner"] > div > div > div {
+            align-items: ${config.showLabels === 'always' ? 'stretch' : 'flex-start'} !important;
+            ${config.showLabels !== 'always' ? 'padding-left: 9px !important; padding-right: 9px !important;' : 'padding-left: 8px !important; padding-right: 8px !important;'}
           }
           main[role="main"] {
             width: calc(100% - ${navWidth}) !important;
@@ -6903,13 +7489,13 @@ const configureCss = (() => {
         }
 
         cssRules.push(`
-        body:not(.Search) ${Selectors.PRIMARY_COLUMN} .cpft-carousel-container {
+        body:not(.Search) ${Selectors.PRIMARY_COLUMN} .cpft-fullview-container {
           max-width: 100% !important;
-          width: fit-content !important;
+          width: 100% !important;
         }
-        body:not(.Search) ${Selectors.PRIMARY_COLUMN} ${Selectors.TWEET} > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div[id][aria-labelledby]:has(.cpft-carousel-container) {
+        body:not(.Search) ${Selectors.PRIMARY_COLUMN} ${Selectors.TWEET} > div > div > div:nth-of-type(2) > div:nth-of-type(2) > div[id][aria-labelledby]:has(.cpft-fullview-container) {
           max-width: 100% !important;
-          width: fit-content !important;
+          width: 100% !important;
         }
         `)
       } else {
@@ -6960,10 +7546,10 @@ const configureCss = (() => {
             width: ${navWidth} !important;
             min-width: ${navWidth} !important;
             max-width: ${navWidth} !important;
-            align-items: flex-start !important;
+            align-items: ${config.showLabels === 'always' ? 'stretch' : 'flex-start'} !important;
             overflow: visible !important;
             box-sizing: border-box !important;
-            ${config.showLabels !== 'always' ? 'padding-left: 9px !important;' : ''}
+            ${config.showLabels !== 'always' ? 'padding-left: 9px !important; padding-right: 9px !important;' : 'padding-left: 8px !important; padding-right: 8px !important;'}
           }
           main[role="main"] {
             flex-grow: 1 !important;
@@ -7147,19 +7733,223 @@ const configureCss = (() => {
       if (config.hideConnectNav) {
         hideCssSelectors.push(`${Selectors.PRIMARY_NAV_DESKTOP} a[href$="/i/connect_people"]`)
       }
-      if (config.centerNavigation) {
+      if (config.showLabels === 'always') {
         cssRules.push(`
-        @media only screen and (min-height: 700px) {
+        @media only screen and (min-width: 988px) {
+          header[role="banner"],
+          header[role="banner"] > div,
+          header[role="banner"] > div > div,
           header[role="banner"] > div > div > div {
-            justify-content: safe center !important;
-            padding-top: 0 !important;
+            width: 275px !important;
+            min-width: 275px !important;
+            max-width: 275px !important;
+            box-sizing: border-box !important;
+            overflow: visible !important;
+          }
+          header[role="banner"] > div > div > div {
+            align-items: stretch !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+            justify-content: space-between !important;
+          }
+
+          /* Logo alignment */
+          header h1 {
+            margin: 0 !important;
+            align-items: flex-start !important;
+            padding-left: 4px !important;
+          }
+
+          /* Nav container & items expanded */
+          ${Selectors.PRIMARY_NAV_DESKTOP} {
+            width: 100% !important;
+            align-items: stretch !important;
+            overflow: visible !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * {
+            width: 100% !important;
+            align-items: stretch !important;
+            display: flex !important;
+            overflow: visible !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div {
+            width: 100% !important;
+            min-height: 50px !important;
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            padding: 0 16px 0 12px !important;
+            border-radius: 9999px !important;
+            box-sizing: border-box !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div:first-child {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 26px !important;
+            min-width: 26px !important;
+            flex-shrink: 0 !important;
+          }
+
+          /* Nav label styling (native & extension) */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div + div:last-child,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button) div[dir]:not([aria-live]),
+          .cpft-nav-label-container {
+            display: inline-flex !important;
+            align-items: center !important;
+            opacity: 1 !important;
+            max-width: none !important;
+            width: auto !important;
+            margin-left: 16px !important;
+            margin-right: 16px !important;
+            overflow: visible !important;
+            pointer-events: auto !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div + div:last-child span,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button) div[dir]:not([aria-live]) span,
+          .cpft-nav-label {
+            font-size: 20px !important;
+            font-weight: 400 !important;
+            color: var(--cpft-text-primary) !important;
+            white-space: nowrap !important;
+            line-height: 24px !important;
+            display: inline-block !important;
+            overflow: visible !important;
+          }
+
+          /* Tweet button full width */
+          header[role="banner"] > div > div > div > div:has([data-testid="SideNav_NewTweet_Button"]),
+          header[role="banner"] > div > div > div > *:has([data-testid="SideNav_NewTweet_Button"]) {
+            align-items: stretch !important;
+            width: 100% !important;
+            margin: 16px 0 4px 0 !important;
+            overflow: visible !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] {
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            min-height: 52px !important;
+            height: 52px !important;
+            padding: 0 32px !important;
+            border-radius: 9999px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            box-sizing: border-box !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] > div {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 100% !important;
+            height: 100% !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] span,
+          [data-testid="SideNav_NewTweet_Button"] .cpft-tweet-label {
+            display: inline-flex !important;
+            opacity: 1 !important;
+            max-width: none !important;
+            margin: 0 !important;
+            overflow: visible !important;
+            white-space: nowrap !important;
+            font-weight: 700 !important;
+            font-size: 17px !important;
+            line-height: 20px !important;
+            color: inherit !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:has(span:not(:empty)) svg {
+            display: none !important;
+          }
+
+          /* Account switcher expanded */
+          header[role="banner"] > div > div > div > div:last-child,
+          header[role="banner"] > div > div > div > *:has([data-testid="SideNav_AccountSwitcher_Button"]) {
+            align-items: stretch !important;
+            width: 100% !important;
+            margin-top: 12px;
+            margin-bottom: 12px !important;
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            overflow: visible !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"] {
+            width: 100% !important;
+            min-width: 100% !important;
+            max-width: 100% !important;
+            min-height: 64px !important;
+            padding: 12px !important;
+            border-radius: 9999px !important;
+            display: inline-flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            box-sizing: border-box !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"] > div:first-child {
+            flex-shrink: 0 !important;
+            width: 40px !important;
+            height: 40px !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"] > div:not(:first-child):not(.cpft-account-label-container) {
+            display: inline-flex !important;
+            opacity: 1 !important;
+            max-width: none !important;
+            flex-grow: 1 !important;
+            margin-left: 12px !important;
+            overflow: visible !important;
+          }
+          .cpft-account-label-container {
+            display: inline-flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            flex-grow: 1 !important;
+            margin-left: 12px !important;
+            min-width: 0 !important;
+          }
+          .cpft-account-names {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            min-width: 0 !important;
+            text-align: left !important;
+          }
+          .cpft-account-name {
+            font-weight: 700 !important;
+            font-size: 15px !important;
+            line-height: 20px !important;
+            color: var(--cpft-text-primary) !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+          .cpft-account-handle {
+            font-size: 15px !important;
+            line-height: 20px !important;
+            color: rgb(113, 118, 123) !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+          .cpft-account-more {
+            display: flex !important;
+            align-items: center !important;
+            margin-left: auto !important;
+            color: var(--cpft-text-primary) !important;
+          }
+          .cpft-account-more svg {
+            width: 18px !important;
+            height: 18px !important;
+            fill: currentColor !important;
           }
         }
       `)
-      }
-      if (config.showLabels !== 'always') {
+      } else if (config.showLabels === 'hover') {
         cssRules.push(`
         @media only screen and (min-width: 988px) {
+          header[role="banner"],
           header[role="banner"] > div,
           header[role="banner"] > div > div,
           header[role="banner"] > div > div > div {
@@ -7168,22 +7958,349 @@ const configureCss = (() => {
             max-width: 68px !important;
             align-items: flex-start !important;
             box-sizing: border-box !important;
+            overflow: visible !important;
           }
           header[role="banner"] > div > div > div {
             padding-left: 9px !important;
+            padding-right: 9px !important;
           }
+
+          /* Logo */
+          header h1 {
+            margin: 0 !important;
+            align-items: flex-start !important;
+          }
+          header h1 a {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 50px !important;
+            height: 50px !important;
+          }
+          header h1 a > div {
+            width: 50px !important;
+            height: 50px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 0 !important;
+          }
+
+          /* Nav items compact default state (Model A: anchored left) */
+          ${Selectors.PRIMARY_NAV_DESKTOP} {
+            width: 50px !important;
+            align-items: flex-start !important;
+            overflow: visible !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * {
+            overflow: visible !important;
+            width: 50px !important;
+            min-width: 50px !important;
+            align-items: flex-start !important;
+            justify-content: flex-start !important;
+            display: flex !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div {
+            width: 50px !important;
+            min-width: 50px !important;
+            height: 50px !important;
+            min-height: 50px !important;
+            padding: 0 !important;
+            position: relative !important;
+            z-index: 10 !important;
+            overflow: visible !important;
+            display: inline-flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            border-radius: 9999px !important;
+            box-sizing: border-box !important;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div:first-child {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 50px !important;
+            min-width: 50px !important;
+            height: 50px !important;
+            flex-shrink: 0 !important;
+          }
+
+          /* Unhovered labels hidden smoothly */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div + div:last-child,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button) div[dir]:not([aria-live]),
+          .cpft-nav-label-container {
+            display: inline-flex !important;
+            opacity: 0 !important;
+            max-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            pointer-events: none !important;
+            transition: opacity 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), margin-right 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+
+          /* Floating hover pill styling with blur and shadow */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div {
+            width: max-content !important;
+            min-width: 50px !important;
+            max-width: none !important;
+            position: relative !important;
+            z-index: 99999 !important;
+            overflow: visible !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            background-color: var(--cpft-hover-bg, rgba(239, 243, 244, 0.15)) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+          }
+
+          /* Hovered label reveals floating over timeline */
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div > div + div:last-child,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):is(:hover, :focus-visible, :focus-within) div[dir]:not([aria-live]),
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) .cpft-nav-label-container {
+            opacity: 1 !important;
+            max-width: 300px !important;
+            width: auto !important;
+            margin-left: 4px !important;
+            margin-right: 20px !important;
+            overflow: visible !important;
+            pointer-events: auto !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) span,
+          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) .cpft-nav-label {
+            font-size: 19px !important;
+            font-weight: 500 !important;
+            color: var(--cpft-text-primary) !important;
+            white-space: nowrap !important;
+            display: inline-block !important;
+          }
+
+          /* Tweet button hover */
+          header[role="banner"] div:has(> [data-testid="SideNav_NewTweet_Button"]) {
+            width: 50px !important;
+            min-width: 50px !important;
+            max-width: 50px !important;
+            align-items: flex-start !important;
+            justify-content: flex-start !important;
+            overflow: visible !important;
+            display: flex !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] {
+            width: 50px !important;
+            height: 50px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
+            max-width: 50px !important;
+            padding: 0 !important;
+            border-radius: 9999px !important;
+            margin: 8px 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            box-sizing: border-box !important;
+            position: relative !important;
+            z-index: 10 !important;
+            overflow: visible !important;
+            transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.2s ease, filter 0.2s ease !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] > div {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: visible !important;
+            box-sizing: border-box !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] svg {
+            display: inline-block !important;
+            width: 24px !important;
+            height: 24px !important;
+            margin-left: 13px !important;
+            margin-right: 13px !important;
+            flex-shrink: 0 !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:not(:has(svg)) > div::before {
+            content: '' !important;
+            display: inline-block !important;
+            width: 24px !important;
+            height: 24px !important;
+            margin-left: 13px !important;
+            margin-right: 13px !important;
+            flex-shrink: 0 !important;
+            background-color: currentColor !important;
+            -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
+            mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"] span,
+          [data-testid="SideNav_NewTweet_Button"] .cpft-tweet-label {
+            display: inline-flex !important;
+            opacity: 0 !important;
+            max-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            pointer-events: none !important;
+            transition: opacity 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:hover {
+            filter: brightness(1.08) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) {
+            width: max-content !important;
+            min-width: 50px !important;
+            max-width: 180px !important;
+            padding: 0 20px 0 0 !important;
+            position: relative !important;
+            z-index: 99999 !important;
+            justify-content: flex-start !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) svg,
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within):not(:has(svg)) > div::before {
+            margin-left: 13px !important;
+            margin-right: 12px !important;
+          }
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) span,
+          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) .cpft-tweet-label {
+            opacity: 1 !important;
+            max-width: 120px !important;
+            margin: 0 !important;
+            margin-right: 4px !important;
+            white-space: nowrap !important;
+            display: inline-block !important;
+            overflow: visible !important;
+            font-weight: 700 !important;
+            font-size: 15px !important;
+            color: inherit !important;
+            pointer-events: auto !important;
+          }
+
+          /* Account switcher hover (Model A: anchored left) */
+          header[role="banner"] > div > div > div > div:last-child,
+          header[role="banner"] > div > div > div > *:has([data-testid="SideNav_AccountSwitcher_Button"]) {
+            align-items: flex-start !important;
+            width: 50px !important;
+            overflow: visible !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"] {
+            width: 50px !important;
+            height: 50px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
+            max-width: 50px !important;
+            padding: 0 !important;
+            border-radius: 9999px !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            position: relative !important;
+            z-index: 10 !important;
+            box-sizing: border-box !important;
+            transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"] > div:first-child {
+            width: 40px !important;
+            height: 40px !important;
+            min-width: 40px !important;
+            margin-left: 5px !important;
+            flex-shrink: 0 !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"] > div:not(:first-child),
+          .cpft-account-label-container {
+            display: inline-flex !important;
+            opacity: 0 !important;
+            max-width: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+            white-space: nowrap !important;
+            pointer-events: none !important;
+            transition: opacity 0.18s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) {
+            width: max-content !important;
+            min-width: 50px !important;
+            max-width: 275px !important;
+            padding: 0 16px 0 0 !important;
+            position: relative !important;
+            z-index: 99999 !important;
+            justify-content: flex-start !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            background-color: var(--cpft-hover-bg, rgba(239, 243, 244, 0.15)) !important;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
+          }
+          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) > div:not(:first-child),
+          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) .cpft-account-label-container {
+            opacity: 1 !important;
+            max-width: 220px !important;
+            margin-left: 10px !important;
+            overflow: visible !important;
+            pointer-events: auto !important;
+          }
+          .cpft-account-names {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: center !important;
+            min-width: 0 !important;
+            text-align: left !important;
+          }
+          .cpft-account-name {
+            font-weight: 700 !important;
+            font-size: 15px !important;
+            line-height: 20px !important;
+            color: var(--cpft-text-primary) !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+          .cpft-account-handle {
+            font-size: 15px !important;
+            line-height: 20px !important;
+            color: rgb(113, 118, 123) !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+          }
+          .cpft-account-more {
+            display: flex !important;
+            align-items: center !important;
+            margin-left: 12px !important;
+            color: var(--cpft-text-primary) !important;
+          }
+          .cpft-account-more svg {
+            width: 18px !important;
+            height: 18px !important;
+            fill: currentColor !important;
+          }
+        }
+      `)
+      } else {
+        cssRules.push(`
+        @media only screen and (min-width: 988px) {
           header[role="banner"],
           header[role="banner"] > div,
           header[role="banner"] > div > div,
           header[role="banner"] > div > div > div {
+            width: 68px !important;
+            min-width: 68px !important;
+            max-width: 68px !important;
+            align-items: flex-start !important;
+            box-sizing: border-box !important;
             overflow: visible !important;
           }
-        }
-      `)
-      }
-      if (config.showLabels === 'never') {
-        cssRules.push(`
-        @media only screen and (min-width: 988px) {
+          header[role="banner"] > div > div > div {
+            padding-left: 9px !important;
+            padding-right: 9px !important;
+          }
+
           /* Single vertical centerline alignment */
           header h1 {
             margin: 0 !important;
@@ -7217,18 +8334,30 @@ const configureCss = (() => {
           }
           ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div + div:last-child,
           ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button) div[dir]:not([aria-live]),
-          [data-testid="SideNav_AccountSwitcher_Button"] > div:not(:first-child) {
+          .cpft-nav-label-container,
+          [data-testid="SideNav_AccountSwitcher_Button"] > div:not(:first-child),
+          .cpft-account-label-container {
             display: none !important;
           }
 
           ${Selectors.PRIMARY_NAV_DESKTOP} > * > div {
             width: 50px !important;
             height: 50px !important;
+            min-width: 50px !important;
+            min-height: 50px !important;
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
             border-radius: 9999px !important;
             box-sizing: border-box !important;
+            padding: 0 !important;
+          }
+          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div:first-child {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 50px !important;
+            height: 50px !important;
           }
 
           header[role="banner"] > div > div > div > div:has([data-testid="SideNav_NewTweet_Button"]),
@@ -7274,7 +8403,8 @@ const configureCss = (() => {
             width: 100% !important;
             height: 100% !important;
           }
-          [data-testid="SideNav_NewTweet_Button"] span {
+          [data-testid="SideNav_NewTweet_Button"] span,
+          [data-testid="SideNav_NewTweet_Button"] .cpft-tweet-label {
             display: none !important;
           }
           [data-testid="SideNav_NewTweet_Button"] svg {
@@ -7291,238 +8421,36 @@ const configureCss = (() => {
           }
         }
       `)
-      } else if (config.showLabels === 'hover') {
+      }
+      if (config.centerNavigation) {
         cssRules.push(`
-        @media only screen and (min-width: 988px) {
-          /* Single vertical centerline alignment */
-          header h1 {
-            margin: 0 !important;
-            align-items: flex-start !important;
+        @media only screen and (min-height: 500px) {
+          header[role="banner"] > div > div > div {
+            padding-top: 0 !important;
           }
-          header h1 a {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 50px !important;
-            height: 50px !important;
-          }
-          header h1 a > div {
-            width: 50px !important;
-            height: 50px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 0 !important;
-          }
-
-          /* Compact icon-only default state */
-          ${Selectors.PRIMARY_NAV_DESKTOP} {
-            width: 50px !important;
-            align-items: flex-start !important;
-            overflow: visible !important;
-          }
-          ${Selectors.PRIMARY_NAV_DESKTOP} > * {
-            overflow: visible !important;
-            width: fit-content !important;
-            min-width: 50px !important;
-            align-items: flex-start !important;
-            justify-content: flex-start !important;
+          header[role="banner"] > div > div > div > div:first-child {
+            flex: 1 1 auto !important;
             display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
           }
-          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div {
-            width: fit-content !important;
-            min-width: 50px !important;
-            height: 50px !important;
-            position: relative !important;
-            z-index: 10 !important;
-            overflow: visible !important;
-            display: inline-flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            justify-content: flex-start !important;
-            border-radius: 9999px !important;
-            box-sizing: border-box !important;
-            transition: background-color 0.2s ease, box-shadow 0.2s ease !important;
+          header[role="banner"] > div > div > div > div:first-child > div:has(> nav) {
+            margin-top: auto !important;
           }
-
-          header[role="banner"] > div > div > div > div:has([data-testid="SideNav_NewTweet_Button"]),
-          header[role="banner"] > div > div > div > *:has([data-testid="SideNav_NewTweet_Button"]) {
-            align-items: flex-start !important;
-            width: 50px !important;
-            overflow: visible !important;
+          ${config.hideComposeTweet ? `
+          header[role="banner"] > div > div > div > div:first-child > div:has(> nav) {
+            margin-bottom: auto !important;
           }
+          ` : `
+          header[role="banner"] > div > div > div > div:first-child > :is(div:has(> nav), div:has(> [data-testid="SideNav_NewTweet_Button"])):last-child {
+            margin-bottom: auto !important;
+          }
+          `}
           header[role="banner"] > div > div > div > div:last-child,
           header[role="banner"] > div > div > div > *:has([data-testid="SideNav_AccountSwitcher_Button"]) {
-            align-items: flex-start !important;
-            width: 50px !important;
-            overflow: visible !important;
-          }
-
-          [data-testid="SideNav_AccountSwitcher_Button"] {
-            width: 50px !important;
-            height: 50px !important;
-            min-width: 50px !important;
-            min-height: 50px !important;
-            padding: 0 !important;
-            border-radius: 9999px !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            position: relative !important;
-            z-index: 10 !important;
-            box-sizing: border-box !important;
-            transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-          }
-
-          [data-testid="SideNav_NewTweet_Button"] {
-            width: 50px !important;
-            height: 50px !important;
-            min-width: 50px !important;
-            min-height: 50px !important;
-            max-width: 50px !important;
-            padding: 0 !important;
-            border-radius: 9999px !important;
-            margin: 8px 0 !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            box-sizing: border-box !important;
-            position: relative !important;
-            z-index: 10 !important;
-            transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), padding 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-          }
-          [data-testid="SideNav_NewTweet_Button"] > div {
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            width: 100% !important;
-            height: 100% !important;
-          }
-          [data-testid="SideNav_NewTweet_Button"] span {
-            display: inline-flex !important;
-            opacity: 0 !important;
-            max-width: 0 !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            overflow: hidden !important;
-            white-space: nowrap !important;
-            pointer-events: none !important;
-            transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-          }
-          [data-testid="SideNav_NewTweet_Button"] svg {
-            display: inline-block !important;
-          }
-          [data-testid="SideNav_NewTweet_Button"]:not(:has(svg)) > div::before {
-            content: '' !important;
-            display: inline-block !important;
-            width: 22px !important;
-            height: 22px !important;
-            background-color: currentColor !important;
-            -webkit-mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
-            mask: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z'/%3E%3C/svg%3E") no-repeat center / contain !important;
-          }
-
-          /* Hide labels unhovered with smooth transition */
-          ${Selectors.PRIMARY_NAV_DESKTOP} > * > div > div + div:last-child,
-          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button) div[dir]:not([aria-live]),
-          [data-testid="SideNav_AccountSwitcher_Button"] > div:not(:first-child) {
-            display: inline-flex !important;
-            opacity: 0 !important;
-            max-width: 0 !important;
-            margin-left: 0 !important;
-            margin-right: 0 !important;
-            padding: 0 !important;
-            overflow: hidden !important;
-            white-space: nowrap !important;
-            pointer-events: none !important;
-            transition: opacity 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), max-width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), margin-left 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), margin-right 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) !important;
-          }
-
-          /* Floating hover pill styling with blur and shadow */
-          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div,
-          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) {
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
-            background-color: var(--cpft-hover-bg, rgba(239, 243, 244, 0.15)) !important;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
-          }
-
-          /* Allow hovered pill to expand beyond rail width and float over timeline */
-          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div {
-            width: max-content !important;
-            min-width: 50px !important;
-            max-width: none !important;
-            position: relative !important;
-            z-index: 99999 !important;
-            overflow: visible !important;
-          }
-
-          /* Reveal label on hover/focus for the hovered/focused individual item without truncation */
-          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div > div + div:last-child,
-          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):is(:hover, :focus-visible, :focus-within) div[dir]:not([aria-live]) {
-            opacity: 1 !important;
-            max-width: 300px !important;
-            width: auto !important;
-            margin-left: 16px !important;
-            margin-right: 16px !important;
-            overflow: visible !important;
-            pointer-events: auto !important;
-          }
-          ${Selectors.PRIMARY_NAV_DESKTOP} > *:is(:hover, :focus-within) > div > div + div:last-child span,
-          ${Selectors.PRIMARY_NAV_DESKTOP} > :is(a, button):is(:hover, :focus-visible, :focus-within) div[dir]:not([aria-live]) span {
-            overflow: visible !important;
-            text-overflow: clip !important;
-            white-space: nowrap !important;
-            display: inline-block !important;
-            max-width: none !important;
-          }
-
-          /* Account switcher hover/focus: expands to right, floating over timeline */
-          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) {
-            width: max-content !important;
-            min-width: 50px !important;
-            max-width: 275px !important;
-            padding: 8px 16px 8px 12px !important;
-            position: relative !important;
-            z-index: 99999 !important;
-            justify-content: flex-start !important;
-          }
-          [data-testid="SideNav_AccountSwitcher_Button"]:is(:hover, :focus-within) > div:not(:first-child) {
-            opacity: 1 !important;
-            max-width: 200px !important;
-            margin-left: 12px !important;
-            margin-right: 4px !important;
-            pointer-events: auto !important;
-            white-space: nowrap !important;
-            overflow: visible !important;
-          }
-
-          /* Tweet button hover/focus: expands to right, floating over timeline */
-          [data-testid="SideNav_NewTweet_Button"]:hover {
-            filter: brightness(1.1) !important;
-            box-shadow: 0 4px 14px rgba(29, 155, 240, 0.45) !important;
-          }
-          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) {
-            width: max-content !important;
-            min-width: 50px !important;
-            max-width: 180px !important;
-            padding: 0 20px !important;
-            position: relative !important;
-            z-index: 99999 !important;
-          }
-          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) svg {
-            display: inline-block !important;
-          }
-          [data-testid="SideNav_NewTweet_Button"]:is(:hover, :focus-within) span {
-            opacity: 1 !important;
-            max-width: 100px !important;
-            margin-left: 8px !important;
-            white-space: nowrap !important;
-            display: inline-block !important;
-            overflow: visible !important;
-            font-weight: 700 !important;
-            font-size: 15px !important;
-            color: inherit !important;
+            margin-top: auto !important;
+            margin-bottom: 12px !important;
+            flex-shrink: 0 !important;
           }
         }
       `)
@@ -7810,7 +8738,8 @@ const configureFeatureFlags = (() => {
     isTrue = featureSwitches.isTrue
     featureSwitches.isTrue = (flag) => {
       if (config.bypassAgeVerification && flag == 'rweb_age_assurance_flow_enabled') return false
-      if ((config.mediaView === 'grid' || config.mediaView === 'carousel' || config.revertMediaCarousel) && flag == 'rweb_media_carousel_enabled') return false
+      if ((config.mediaView === 'grid' || config.revertMediaCarousel) && flag == 'rweb_media_carousel_enabled') return false
+      if ((config.mediaView === 'default' || config.mediaView === 'full') && flag == 'rweb_media_carousel_enabled') return true
       if (config.revertProfileTabs && flag == 'responsive_web_profile_redesign_enabled') return false
       return isTrue(flag)
     }
@@ -9284,6 +10213,7 @@ function onTimelineChange($timeline, page, options = {}) {
       if (!hideItem) {
         addDownloadButton($tweet)
         processTweetMediaCarousel($tweet)
+        processSingleVideoMedia($tweet)
         if (config.autoExpandCaptions) {
           expandTweetCaptions($tweet)
         }
@@ -9528,6 +10458,7 @@ function onIndividualTweetTimelineChange($timeline, options) {
       if (!hideItem) {
         addDownloadButton($tweet)
         processTweetMediaCarousel($tweet)
+        processSingleVideoMedia($tweet)
         if (config.autoExpandCaptions) {
           expandTweetCaptions($tweet)
         }
@@ -10509,6 +11440,7 @@ async function tweakFocusedTweet($focusedTweet, options) {
   }
 
   processTweetMediaCarousel($focusedTweet)
+  processSingleVideoMedia($focusedTweet)
   if (config.autoExpandCaptions) {
     expandTweetCaptions($focusedTweet)
   }
@@ -10612,6 +11544,7 @@ async function tweakIndividualTweetPage() {
       for (let $tweet of $tweets) {
         addDownloadButton($tweet)
         processTweetMediaCarousel($tweet)
+        processSingleVideoMedia($tweet)
         if (config.autoExpandCaptions) {
           expandTweetCaptions($tweet)
         }
@@ -11380,7 +12313,14 @@ function configChanged(changes) {
       document.querySelector('#cpftSeparatedTweetsTab')?.remove()
       document.querySelectorAll('.cpft_menu_item').forEach(el => el.remove())
       document.querySelectorAll('.cpft_download_action').forEach(el => el.remove())
-      document.querySelectorAll('.cpft-carousel-container').forEach(el => el.remove())
+      document.querySelectorAll('.cpft-carousel-container').forEach(el => {
+        restoreReparentedVideos(el)
+        el.remove()
+      })
+      document.querySelectorAll('.cpft-fullview-container').forEach(el => {
+        restoreReparentedVideos(el)
+        el.remove()
+      })
       document.querySelectorAll('.cpft-original-media-hidden').forEach(el => {
         el.classList.remove('cpft-original-media-hidden')
         el.removeAttribute('aria-hidden')
@@ -11427,30 +12367,35 @@ function configChanged(changes) {
       teardownAutoExpandCaptions()
     }
   }
-  if ('mediaView' in changes || 'horizontalMediaCarousel' in changes) {
+  if ('mediaView' in changes || 'enableMediaDrag' in changes || 'horizontalMediaCarousel' in changes) {
     let carousels = document.querySelectorAll('.cpft-carousel-container')
-    if (!isCarouselViewEnabled()) {
-      for (let c of carousels) c.remove()
+    for (let c of carousels) {
+      restoreReparentedVideos(c)
+      c.remove()
+    }
+    let stacks = document.querySelectorAll('.cpft-fullview-container')
+    if (!isFullViewEnabled()) {
+      for (let s of stacks) {
+        restoreReparentedVideos(s)
+        s.remove()
+      }
       let hidden = document.querySelectorAll('.cpft-original-media-hidden')
       for (let h of hidden) {
         h.classList.remove('cpft-original-media-hidden')
         h.removeAttribute('aria-hidden')
         delete h.dataset.cpftCarouselAttached
       }
-    } else {
-      let tweets = document.querySelectorAll(Selectors.TWEET)
-      for (let t of tweets) processTweetMediaCarousel(t)
     }
-  }
-  if ('timelineWidth' in changes || 'timelineAlignment' in changes) {
-    requestAnimationFrame(() => {
-      let carousels = document.querySelectorAll('.cpft-carousel-container')
-      for (let c of carousels) {
-        if (typeof c._cpftUpdateDims === 'function') {
-          c._cpftUpdateDims()
-        }
-      }
-    })
+    if (!config.enabled || config.mediaView !== 'default' || !config.enableMediaDrag) {
+      document.querySelectorAll('.cpft-native-drag-enabled, .cpft-native-dragging').forEach(el => {
+        el.classList.remove('cpft-native-drag-enabled', 'cpft-native-dragging')
+      })
+    }
+    let tweets = document.querySelectorAll(Selectors.TWEET)
+    for (let t of tweets) {
+      processTweetMediaCarousel(t)
+      processSingleVideoMedia(t)
+    }
   }
   // Store the current notification count if hiding notifications was enabled
   if ('hideNotifications' in changes && config.hideNotifications != 'ignore') {
@@ -11486,7 +12431,7 @@ function configChanged(changes) {
 let $settings = /** @type {HTMLScriptElement} */ (document.querySelector('script#cpftSettings'))
 if ($settings) {
   try {
-    Object.assign(config, JSON.parse($settings.innerText))
+    Object.assign(config, JSON.parse($settings.textContent || $settings.innerText))
     if (config.downloadFilenameFormat) {
       config.downloadFilenameFormat = normalizeFilenameTemplate(config.downloadFilenameFormat)
     }
@@ -11498,7 +12443,7 @@ if ($settings) {
     /** @type {Partial<import("./types").Config>} */
     let configChanges
     try {
-      configChanges = JSON.parse($settings.innerText)
+      configChanges = JSON.parse($settings.textContent || $settings.innerText)
     } catch(e) {
       error('error parsing incoming settings change', e)
       return
@@ -11518,7 +12463,7 @@ if ($settings) {
     Object.assign(config, configChanges)
     configChanged(configChanges)
   })
-  settingsChangeObserver.observe($settings, {childList: true})
+  settingsChangeObserver.observe($settings, {childList: true, subtree: true, characterData: true})
 }
 
 debug = config.debug

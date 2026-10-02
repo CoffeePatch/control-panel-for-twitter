@@ -476,8 +476,14 @@
   "mediaViewGridOption": {
     "message": "Vecchio Twitter"
   },
-  "mediaViewCarouselOption": {
-    "message": "Carosello orizzontale"
+  "mediaViewFullOption": {
+    "message": "Vista completa"
+  },
+  "enableMediaDragLabel": {
+    "message": "Abilita trascinamento contenuti multimediali"
+  },
+  "enableMediaDragInfo": {
+    "message": "Consenti di cliccare e trascinare con il mouse per scorrere i contenuti multimediali in orizzontale"
   },
   "tweakNewLayoutInfo": {
     "message": "Sperimentale - abilita solo se hai il nuovo layout"

@@ -44,7 +44,7 @@ for (let optionValue of [
   'username_type_id',
 ]) {
   let label = chrome.i18n.getMessage(`option_${optionValue}`)
-  for (let $option of document.querySelectorAll(`option[value="${optionValue}"]`)) {
+  for (let $option of document.querySelectorAll(`select:not([name="mediaView"]) option[value="${optionValue}"]`)) {
     $option.textContent = label
   }
 }
@@ -192,7 +192,9 @@ for (let translationId of [
   'mediaViewInfo',
   'mediaViewDefaultOption',
   'mediaViewGridOption',
-  'mediaViewCarouselOption',
+  'mediaViewFullOption',
+  'enableMediaDragLabel',
+  'enableMediaDragInfo',
   'showLabelsLabel',
   'collapsibleSearchLabel',
   'tweakNewLayoutInfo',
@@ -342,9 +344,10 @@ const defaultConfig = {
   restoreQuoteTweetsLink: true,
   restoreTweetSource: true,
   retweets: 'separate',
-  revertMediaCarousel: true,
-  mediaView: 'carousel',
-  horizontalMediaCarousel: true,
+  revertMediaCarousel: false,
+  mediaView: 'default',
+  enableMediaDrag: false,
+  horizontalMediaCarousel: false,
   revertProfileTabs: false,
   showBlueReplyFollowersCount: false,
   showBlueReplyFollowersCountAmount: '1000000',
@@ -527,10 +530,10 @@ function onFormChanged(e) {
       optionsConfig.fullWidthContent = changedConfig.fullWidthContent = isFull
     }
     if ($el.name == 'mediaView') {
-      let isCarousel = $el.value == 'carousel'
       let isGrid = $el.value == 'grid'
-      optionsConfig.horizontalMediaCarousel = changedConfig.horizontalMediaCarousel = isCarousel
-      optionsConfig.revertMediaCarousel = changedConfig.revertMediaCarousel = isGrid || isCarousel
+      let isFull = $el.value == 'full'
+      optionsConfig.revertMediaCarousel = changedConfig.revertMediaCarousel = isGrid || isFull
+      optionsConfig.horizontalMediaCarousel = changedConfig.horizontalMediaCarousel = false
     }
   }
 
@@ -605,6 +608,7 @@ function updateDisplay() {
   $body.classList.toggle('showingSidebarContent', !optionsConfig.hideSidebarContent)
   $body.classList.toggle('tweakingNewLayout', optionsConfig.tweakNewLayout)
   $body.classList.toggle('uninvertedFollowButtons', optionsConfig.uninvertFollowButtons)
+  $body.classList.toggle('mediaViewDefault', optionsConfig.mediaView === 'default')
   $showBlueReplyFollowersCountLabel.textContent = chrome.i18n.getMessage(
     'showBlueReplyFollowersCountLabel',
     formatFollowerCount(Number(optionsConfig.showBlueReplyFollowersCountAmount))
@@ -717,7 +721,8 @@ function normalizeFilenameTemplate(format) {
  * @returns {string}
  */
 function expandTokens(template, metadata = {}) {
-  let d = metadata.timestamp instanceof Date ? metadata.timestamp : (metadata.timestamp ? new Date(metadata.timestamp) : new Date())
+  let sourceDate = metadata.downloadTimestamp ?? metadata.timestamp
+  let d = sourceDate instanceof Date ? sourceDate : (sourceDate ? new Date(sourceDate) : new Date())
   if (isNaN(d.getTime())) d = new Date()
 
   const tokenMap = {
@@ -779,7 +784,7 @@ function generateMediaFilename(metadataOrUser, tweetIdOrIndex, indexOrTotal, tot
   let rawTemplate = '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}'
 
   if (typeof metadataOrUser === 'object' && metadataOrUser !== null) {
-    metadata = metadataOrUser
+    metadata = { ...metadataOrUser }
     index = Number(tweetIdOrIndex) || 0
     total = Number(indexOrTotal) || 1
     ext = totalOrExt || 'mp4'
@@ -799,8 +804,12 @@ function generateMediaFilename(metadataOrUser, tweetIdOrIndex, indexOrTotal, tot
       tweetId,
       type: mediaType,
       title: '',
-      timestamp: new Date(),
+      downloadTimestamp: new Date(),
     }
+  }
+
+  if (!metadata.downloadTimestamp && !metadata.timestamp) {
+    metadata.downloadTimestamp = new Date()
   }
 
   let template = normalizeFilenameTemplate(rawTemplate)
@@ -828,6 +837,7 @@ const SAMPLE_METADATA = {
   title: 'Starship flight test',
   tweetId: '183204928139785682',
   type: 'video',
+  downloadTimestamp: new Date('2026-09-06T22:31:45.037'),
   timestamp: new Date('2026-09-06T22:31:45.037'),
 }
 
@@ -1211,11 +1221,15 @@ function onImportFileSelected(e) {
       if (sanitized.fullWidthContent && !sanitized.timelineWidth) {
         sanitized.timelineWidth = 'full'
       }
+      if (sanitized.mediaView === 'carousel') {
+        sanitized.mediaView = 'default'
+        if (sanitized.enableMediaDrag === undefined) sanitized.enableMediaDrag = true
+      }
       if (sanitized.mediaView) {
-        let isCarousel = sanitized.mediaView === 'carousel'
         let isGrid = sanitized.mediaView === 'grid'
-        sanitized.horizontalMediaCarousel = isCarousel
-        sanitized.revertMediaCarousel = isGrid || isCarousel
+        let isFull = sanitized.mediaView === 'full'
+        sanitized.horizontalMediaCarousel = false
+        sanitized.revertMediaCarousel = isGrid || isFull
       }
 
       chrome.storage.local.set(sanitized, () => {
@@ -1274,8 +1288,20 @@ function main() {
     if (!storedConfig.showLabels) {
       storedConfig.showLabels = 'always'
     }
-    if (!storedConfig.mediaView) {
-      storedConfig.mediaView = storedConfig.horizontalMediaCarousel !== false ? 'carousel' : (storedConfig.revertMediaCarousel ? 'grid' : 'default')
+    if (storedConfig.mediaView === 'carousel') {
+      storedConfig.mediaView = 'default'
+      if (storedConfig.enableMediaDrag === undefined) {
+        storedConfig.enableMediaDrag = true
+      }
+    } else if (!storedConfig.mediaView) {
+      if (storedConfig.horizontalMediaCarousel) {
+        storedConfig.mediaView = 'default'
+        storedConfig.enableMediaDrag = true
+      } else if (storedConfig.revertMediaCarousel) {
+        storedConfig.mediaView = 'grid'
+      } else {
+        storedConfig.mediaView = 'default'
+      }
     }
     if (storedConfig.downloadFilenameFormat) {
       storedConfig.downloadFilenameFormat = normalizeFilenameTemplate(storedConfig.downloadFilenameFormat)

@@ -590,8 +590,14 @@
   "mediaViewGridOption": {
     "message": "Old Twitter"
   },
-  "mediaViewCarouselOption": {
-    "message": "Horizontal carousel"
+  "mediaViewFullOption": {
+    "message": "Full View"
+  },
+  "enableMediaDragLabel": {
+    "message": "Enable media drag"
+  },
+  "enableMediaDragInfo": {
+    "message": "Allow mouse click-and-drag to browse media horizontally"
   },
   "collapsibleSearchLabel": {
     "message": "Collapsible floating search"

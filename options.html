@@ -204,11 +204,21 @@
           <select name="mediaView">
             <option value="default" id="mediaViewDefaultOption">Default</option>
             <option value="grid" id="mediaViewGridOption">Old Twitter</option>
-            <option value="carousel" id="mediaViewCarouselOption">Horizontal carousel</option>
+            <option value="full" id="mediaViewFullOption">Full View</option>
           </select>
         </label>
         <p id="mediaViewInfo">
           Choose how multi-image posts are displayed
+        </p>
+      </section>
+      <section class="checkbox mediaViewDefault">
+        <label>
+          <span id="enableMediaDragLabel">Enable media drag</span>
+          <input type="checkbox" name="enableMediaDrag">
+          <span class="toggle"></span>
+        </label>
+        <p id="enableMediaDragInfo">
+          Allow mouse click-and-drag to browse media horizontally
         </p>
       </section>
       <section class="checkbox">

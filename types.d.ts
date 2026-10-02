@@ -15,8 +15,9 @@ export type Config = {
   disableHomeTimeline: boolean
   disabledHomeTimelineRedirect: 'notifications' | 'messages'
   disableTweetTextFormatting: boolean
-  mediaView: 'default' | 'grid' | 'carousel'
-  horizontalMediaCarousel: boolean
+  mediaView: 'default' | 'grid' | 'full'
+  enableMediaDrag: boolean
+  horizontalMediaCarousel?: boolean
   // Downloads
   downloadMedia: boolean
   downloadFilenameFormat: string

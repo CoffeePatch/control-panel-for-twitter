@@ -4795,12 +4795,19 @@ function getCsrfToken() {
 }
 
 function getCachedTranslation(tweetId, lang = 'en') {
-  return translationCache.get(`${tweetId}:${lang}`) || null
+  const key = `${tweetId}:${lang}`
+  if (!translationCache.has(key)) return null
+  const value = translationCache.get(key)
+  translationCache.delete(key)
+  translationCache.set(key, value)
+  return value
 }
 
 function setCachedTranslation(tweetId, lang = 'en', text) {
   const key = `${tweetId}:${lang}`
-  if (translationCache.size >= MAX_TRANSLATION_CACHE) {
+  if (translationCache.has(key)) {
+    translationCache.delete(key)
+  } else if (translationCache.size >= MAX_TRANSLATION_CACHE) {
     const oldestKey = translationCache.keys().next().value
     if (oldestKey) translationCache.delete(oldestKey)
   }
@@ -4884,13 +4891,19 @@ async function fetchTweetTranslation(tweetId, dstLang = 'en') {
           } catch (_) {}
         }
       }
+      buffer += decoder.decode()
       if (buffer && buffer.trim()) {
-        try {
-          const data = JSON.parse(buffer.trim())
-          if (data?.result?.text) {
-            fullText += data.result.text
-          }
-        } catch (_) {}
+        let lines = buffer.split('\n')
+        for (let line of lines) {
+          line = line.trim()
+          if (!line) continue
+          try {
+            const data = JSON.parse(line)
+            if (data?.result?.text) {
+              fullText += data.result.text
+            }
+          } catch (_) {}
+        }
       }
 
       if (!fullText) {
@@ -4915,6 +4928,10 @@ function queueAutoTranslation(task) {
 
 async function processAutoQueue() {
   if (activeAutoRequests >= MAX_CONCURRENT_AUTO || autoQueue.length === 0) return
+  if (config.tweetTranslation !== 'auto') {
+    autoQueue.length = 0
+    return
+  }
   if (Date.now() < rateLimitCooldownUntil) {
     setTimeout(processAutoQueue, Math.max(1000, rateLimitCooldownUntil - Date.now()))
     return
@@ -4940,11 +4957,11 @@ function getTranslationObserver() {
       for (const entry of entries) {
         if (entry.isIntersecting) {
           const $el = entry.target
-          translationIntersectionObserver.unobserve($el)
+          translationIntersectionObserver?.unobserve($el)
           const tweetId = $el.getAttribute('data-cpft-tweet-id')
-          if (tweetId && document.contains($el)) {
+          if (tweetId && $el.isConnected) {
             queueAutoTranslation(async () => {
-              if (document.contains($el) && $el.getAttribute('data-cpft-tweet-id') === tweetId) {
+              if (config.tweetTranslation === 'auto' && $el.isConnected && $el.getAttribute('data-cpft-tweet-id') === tweetId) {
                 await executeTranslation($el, tweetId, true)
               }
             })
@@ -4957,6 +4974,14 @@ function getTranslationObserver() {
     })
   }
   return translationIntersectionObserver
+}
+
+function teardownAutoTranslation() {
+  if (translationIntersectionObserver) {
+    translationIntersectionObserver.disconnect()
+    translationIntersectionObserver = null
+  }
+  autoQueue.length = 0
 }
 
 function renderTranslateTrigger($container, tweetId) {
@@ -11297,6 +11322,7 @@ function processTwitterLogos($el) {
 
 function processCurrentPage() {
   disconnectObservers(pageObservers, 'page')
+  teardownAutoTranslation()
 
   // Hooks for styling pages
   if (!$body) $body = document.body
@@ -12842,6 +12868,8 @@ function configChanged(changes) {
         delete el.dataset.cpftCarouselAttached
       })
       teardownAutoExpandCaptions()
+      teardownAutoTranslation()
+      document.querySelectorAll('.cpft-translation-container').forEach(el => el.remove())
       disconnectObservers(modalObservers, 'modal')
       disconnectObservers(pageObservers, 'page')
       disconnectObservers(globalObservers, 'global')
@@ -12882,10 +12910,9 @@ function configChanged(changes) {
     document.querySelectorAll('[data-cpft-menu-item="open-video-in-new-tab"]').forEach(el => el.remove())
   }
   if ('tweetTranslation' in changes) {
-    if (config.tweetTranslation === 'off') {
-      document.querySelectorAll('.cpft-translation-container').forEach(el => el.remove())
-    } else {
-      document.querySelectorAll('.cpft-translation-container').forEach(el => el.remove())
+    teardownAutoTranslation()
+    document.querySelectorAll('.cpft-translation-container').forEach(el => el.remove())
+    if (config.tweetTranslation !== 'off') {
       let tweets = document.querySelectorAll(Selectors.TWEET)
       for (let t of tweets) processTweetTranslation(t)
     }

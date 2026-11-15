@@ -15,6 +15,7 @@ export type Config = {
   disableHomeTimeline: boolean
   disabledHomeTimelineRedirect: 'notifications' | 'messages'
   disableTweetTextFormatting: boolean
+  tweetTranslation: 'off' | 'manual' | 'auto'
   mediaView: 'default' | 'grid' | 'full'
   enableMediaDrag: boolean
   horizontalMediaCarousel?: boolean
@@ -177,8 +178,15 @@ export type LocaleKey =
   | 'SHARED_TWEETS'
   | 'SHOW'
   | 'SHOW_MORE_REPLIES'
+  | 'SHOW_TRANSLATION'
+  | 'HIDE_TRANSLATION'
   | 'SORT_BY'
   | 'SORT_REPLIES'
+  | 'TRANSLATE_POST'
+  | 'TRANSLATING'
+  | 'TRANSLATED'
+  | 'TRANSLATION_FAILED'
+  | 'RETRY'
   | 'TURN_OFF_QUOTE_TWEETS'
   | 'TURN_OFF_RETWEETS'
   | 'TURN_ON_RETWEETS'

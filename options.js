@@ -1292,6 +1292,12 @@ function parseBackupContent(content) {
  */
 function processImportContent(content) {
   let parseResult = parseBackupContent(content)
+  console.log('[CPFT] Backup parse result:', {
+    success: parseResult.success,
+    format: parseResult.format,
+    version: parseResult.version,
+    errorKey: parseResult.errorKey
+  })
   if (!parseResult.success) {
     showSettingsStatus(chrome.i18n.getMessage(parseResult.errorKey) || 'Failed to import settings', 'error')
     return
@@ -1317,6 +1323,13 @@ function processImportContent(content) {
     }
   }
 
+  console.log('[CPFT] Settings validation summary:', {
+    totalRawEntries: Object.keys(rawSettings).length,
+    restoredCount: restoredKeys.length,
+    skippedCount: skippedKeys.length,
+    invalidCount: invalidKeys.length
+  })
+
   // Reject empty or entirely invalid settings objects without overwriting or false success
   if (restoredKeys.length === 0) {
     showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat') || 'Failed to import settings: No valid settings found in backup', 'error')
@@ -1325,7 +1338,9 @@ function processImportContent(content) {
 
   // Confirmation before overwrite
   let confirmMsg = chrome.i18n.getMessage('importSettingsConfirm') || 'Importing settings will overwrite your current configuration. Are you sure you want to proceed?'
-  if (!window.confirm(confirmMsg)) {
+  let confirmed = window.confirm(confirmMsg)
+  console.log('[CPFT] User confirmation result:', confirmed)
+  if (!confirmed) {
     return
   }
 
@@ -1372,8 +1387,12 @@ function processImportContent(content) {
   }
 
   chrome.storage.local.set(completeConfig, () => {
-    if (chrome.runtime.lastError) {
-      console.error('chrome.storage.local.set error:', chrome.runtime.lastError)
+    let lastErr = chrome.runtime.lastError
+    console.log('[CPFT] chrome.storage.local.set completed:', {
+      error: lastErr ? lastErr.message : null
+    })
+    if (lastErr) {
+      console.error('[CPFT] chrome.storage.local.set error:', lastErr)
       showSettingsStatus(chrome.i18n.getMessage('importSettingsError') || 'Failed to import settings: An unexpected error occurred', 'error')
       return
     }
@@ -1399,6 +1418,7 @@ function processImportContent(content) {
       details.push(`${invalidKeys.length} invalid skipped`)
     }
     let fullMsg = `${baseMsg} (${details.join(', ')})`
+    console.log('[CPFT] Final import notification:', fullMsg)
 
     showSettingsStatus(fullMsg, 'success')
   })
@@ -1411,6 +1431,11 @@ function processImportContent(content) {
 function onImportFileSelected(e) {
   let $input = /** @type {HTMLInputElement} */ (e.target)
   let file = $input.files?.[0]
+  console.log('[CPFT] onImportFileSelected event:', {
+    hasFile: Boolean(file),
+    fileName: file?.name,
+    fileSize: file?.size
+  })
   // Reset input immediately so user can re-import the same file if needed
   $input.value = ''
   if (!file) return
@@ -1419,14 +1444,16 @@ function onImportFileSelected(e) {
   reader.onload = (event) => {
     try {
       let content = /** @type {string} */ (event.target?.result)
+      console.log('[CPFT] FileReader onload completed, content length:', content?.length)
       processImportContent(content)
     } catch (err) {
-      console.error('Import settings error:', err)
+      console.error('[CPFT] Import settings error during onload:', err)
       showSettingsStatus(chrome.i18n.getMessage('importSettingsError') || 'Failed to import settings: An unexpected error occurred', 'error')
     }
   }
 
-  reader.onerror = () => {
+  reader.onerror = (err) => {
+    console.error('[CPFT] FileReader onerror:', err)
     showSettingsStatus(chrome.i18n.getMessage('importSettingsError') || 'Failed to import settings: An unexpected error occurred', 'error')
   }
 
@@ -1439,12 +1466,18 @@ function setupSettingsManagement() {
   }
   if ($importSettingsButton) {
     $importSettingsButton.addEventListener('click', (e) => {
-      if (document.body.classList.contains('browserAction')) {
+      let isPopup = document.body.classList.contains('browserAction')
+      let isEmbedded = window.self !== window.top
+      console.log('[CPFT] Import button clicked:', { isPopup, isEmbedded })
+
+      if (isPopup || isEmbedded) {
         e.preventDefault()
-        if (chrome.runtime.openOptionsPage) {
-          chrome.runtime.openOptionsPage()
+        let optionsUrl = chrome.runtime.getURL('options.html')
+        console.log('[CPFT] Opening standalone options tab via chrome.tabs.create')
+        if (chrome.tabs?.create) {
+          chrome.tabs.create({ url: optionsUrl })
         } else {
-          window.open(chrome.runtime.getURL('options.html'))
+          window.open(optionsUrl, '_blank')
         }
         return
       }

@@ -4963,16 +4963,21 @@ function getTranslationObserver() {
     translationIntersectionObserver = new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) {
-          const $el = entry.target
-          translationIntersectionObserver?.unobserve($el)
-          const tweetId = $el.getAttribute('data-cpft-tweet-id')
-          if (tweetId && $el.isConnected) {
+          const $btn = entry.target
+          translationIntersectionObserver?.unobserve($btn)
+          const tweetId = $btn.getAttribute('data-cpft-tweet-id')
+          if (tweetId && $btn.isConnected) {
             queueAutoTranslation(async () => {
-              if (config.tweetTranslation === 'auto' && $el.isConnected && $el.getAttribute('data-cpft-tweet-id') === tweetId) {
-                let $parent = $el.parentNode
-                let $primaryText = $parent?.querySelector(TWEET_TEXT_SELECTOR)
-                if ($primaryText) {
-                  await executeTranslation($el, $primaryText, tweetId, true)
+              if (config.tweetTranslation === 'auto' && $btn.isConnected && $btn.getAttribute('data-cpft-tweet-id') === tweetId) {
+                let $tweet = $btn.closest(Selectors.TWEET) || $btn.closest('article')
+                if ($tweet) {
+                  let quoteContainers = getNestedQuoteContainers($tweet)
+                  let $tweetTexts = Array.from($tweet.querySelectorAll(TWEET_TEXT_SELECTOR)).filter(
+                    $el => !quoteContainers.some($qc => $qc.contains($el))
+                  )
+                  if ($tweetTexts.length > 0) {
+                    await executeHeaderTranslation($tweet, $btn, $tweetTexts[0], tweetId)
+                  }
                 }
               }
             })
@@ -4995,181 +5000,95 @@ function teardownAutoTranslation() {
   autoQueue.length = 0
 }
 
-function renderTranslateTrigger($container, $primaryText, tweetId) {
-  $container.replaceChildren()
-  if ($primaryText) {
-    $primaryText.style.display = ''
-  }
-
-  let $trigger = document.createElement('div')
-  $trigger.className = 'cpft-translate-trigger'
-
-  let $btn = document.createElement('button')
-  $btn.type = 'button'
-  $btn.className = 'cpft-translate-btn'
-  $btn.setAttribute('role', 'button')
-  $btn.setAttribute('aria-label', getString('TRANSLATE_POST'))
-  $btn.setAttribute('title', getString('TRANSLATE_POST'))
-
-  let $iconSvg = createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon')
-  $btn.appendChild($iconSvg)
-
-  $btn.addEventListener('click', async (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    await executeTranslation($container, $primaryText, tweetId, false)
-  })
-
-  $trigger.appendChild($btn)
-  $container.appendChild($trigger)
-}
-
-function renderLoadingState($container) {
-  $container.replaceChildren()
-
-  let $loading = document.createElement('div')
-  $loading.className = 'cpft-translate-loading'
-  $loading.setAttribute('aria-label', getString('TRANSLATING'))
-  $loading.setAttribute('title', getString('TRANSLATING'))
-
-  let $spinner = createLoadingSvg('cpft-translate-spinner')
-  $loading.appendChild($spinner)
-  $container.appendChild($loading)
-}
-
-function renderTranslationError($container, $primaryText, tweetId, isRateLimit) {
-  $container.replaceChildren()
-  if ($primaryText) {
-    $primaryText.style.display = ''
-  }
-
-  let $error = document.createElement('div')
-  $error.className = 'cpft-translate-error'
-
-  let $msg = document.createElement('span')
-  $msg.className = 'cpft-translate-error-msg'
-  $msg.textContent = isRateLimit ? 'Rate limit reached. Try later.' : getString('TRANSLATION_FAILED')
-
-  let $retryBtn = document.createElement('button')
-  $retryBtn.type = 'button'
-  $retryBtn.className = 'cpft-translate-retry-btn'
-  $retryBtn.textContent = getString('RETRY')
-
-  $retryBtn.addEventListener('click', async (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    await executeTranslation($container, $primaryText, tweetId, false)
-  })
-
-  $error.appendChild($msg)
-  $error.appendChild($retryBtn)
-  $container.appendChild($error)
-}
-
-function renderStreamingChunk($container, $primaryText, tweetId, chunkText) {
+function renderStreamingChunkInPlace($primaryText, tweetId, chunkText) {
   if ($primaryText) {
     $primaryText.style.display = 'none'
   }
-  let $text = $container.querySelector('.cpft-translated-text')
-  if (!$text) {
-    $container.replaceChildren()
-    $text = document.createElement('div')
-    $text.className = `cpft-translated-text ${$primaryText?.className || ''}`
-    $text.setAttribute('dir', 'auto')
-    if ($primaryText) {
-      let compColor = window.getComputedStyle($primaryText).color
-      if (compColor) $text.style.color = compColor
-    }
-    $container.appendChild($text)
-  }
-  $text.textContent = chunkText
-}
+  let $parent = $primaryText?.parentNode
+  if (!$parent) return
 
-function renderTranslationResult($container, $primaryText, tweetId, translatedText) {
-  $container.replaceChildren()
-
-  let state = tweetDisplayState.get(tweetId) || 'translated'
-  if ($primaryText) {
-    $primaryText.style.display = state === 'translated' ? 'none' : ''
-  }
-
-  let $translatedText = document.createElement('div')
-  $translatedText.className = `cpft-translated-text ${$primaryText?.className || ''}`
-  $translatedText.setAttribute('dir', 'auto')
-  if ($primaryText) {
+  let $translatedText = $parent.querySelector(`:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`)
+  if (!$translatedText) {
+    $translatedText = document.createElement('div')
+    $translatedText.className = `cpft-translated-text ${$primaryText.className || ''}`
+    $translatedText.setAttribute('dir', 'auto')
+    $translatedText.setAttribute('data-cpft-translation-for', tweetId)
     let compColor = window.getComputedStyle($primaryText).color
     if (compColor) $translatedText.style.color = compColor
+    $parent.insertBefore($translatedText, $primaryText.nextSibling)
   }
-  $translatedText.textContent = translatedText
-  if (state !== 'translated') {
-    $translatedText.style.display = 'none'
-  }
-
-  let $attribution = document.createElement('div')
-  $attribution.className = 'cpft-translation-attribution'
-
-  let $meta = document.createElement('span')
-  $meta.className = 'cpft-translation-meta'
-
-  let $icon = createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translation-grok-icon')
-  let $sourceLabel = document.createElement('span')
-  $sourceLabel.textContent = `${getString('TRANSLATED_BY')} Grok`
-
-  $meta.appendChild($icon)
-  $meta.appendChild($sourceLabel)
-
-  let $dot = document.createElement('span')
-  $dot.className = 'cpft-translation-separator'
-  $dot.textContent = '·'
-
-  let $toggle = document.createElement('button')
-  $toggle.type = 'button'
-  $toggle.className = 'cpft-translation-toggle'
-  $toggle.setAttribute('role', 'button')
-  $toggle.textContent = state === 'translated' ? getString('SHOW_ORIGINAL') : getString('SHOW_TRANSLATION')
-
-  $toggle.addEventListener('click', (e) => {
-    e.preventDefault()
-    e.stopPropagation()
-    let currentState = tweetDisplayState.get(tweetId) || 'translated'
-    if (currentState === 'translated') {
-      if ($primaryText) $primaryText.style.display = ''
-      $translatedText.style.display = 'none'
-      $toggle.textContent = getString('SHOW_TRANSLATION')
-      tweetDisplayState.set(tweetId, 'original')
-    } else {
-      if ($primaryText) $primaryText.style.display = 'none'
-      $translatedText.style.display = ''
-      $toggle.textContent = getString('SHOW_ORIGINAL')
-      tweetDisplayState.set(tweetId, 'translated')
-    }
-  })
-
-  $attribution.appendChild($meta)
-  $attribution.appendChild($dot)
-  $attribution.appendChild($toggle)
-
-  $container.appendChild($translatedText)
-  $container.appendChild($attribution)
+  $translatedText.textContent = chunkText
+  $translatedText.style.display = ''
 }
 
-async function executeTranslation($container, $primaryText, tweetId, isAuto) {
-  if (!$container || !tweetId) return
-  renderLoadingState($container)
+function setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, text, displayState) {
+  let $parent = $primaryText?.parentNode
+  if (!$parent) return
+
+  let $translatedText = $parent.querySelector(`:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`)
+  if (!$translatedText && text) {
+    $translatedText = document.createElement('div')
+    $translatedText.className = `cpft-translated-text ${$primaryText.className || ''}`
+    $translatedText.setAttribute('dir', 'auto')
+    $translatedText.setAttribute('data-cpft-translation-for', tweetId)
+    let compColor = window.getComputedStyle($primaryText).color
+    if (compColor) $translatedText.style.color = compColor
+    $parent.insertBefore($translatedText, $primaryText.nextSibling)
+  }
+
+  if ($translatedText && text) {
+    $translatedText.textContent = text
+  }
+
+  $btn.classList.remove('cpft-translate-loading')
+  $btn.replaceChildren(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+
+  if (displayState === 'translated') {
+    if ($primaryText) $primaryText.style.display = 'none'
+    if ($translatedText) $translatedText.style.display = ''
+    $btn.className = 'cpft-translate-header-btn cpft-translate-state-translated'
+    $btn.setAttribute('title', getString('SHOW_ORIGINAL'))
+    $btn.setAttribute('aria-label', getString('SHOW_ORIGINAL'))
+    tweetDisplayState.set(tweetId, 'translated')
+  } else {
+    if ($primaryText) $primaryText.style.display = ''
+    if ($translatedText) $translatedText.style.display = 'none'
+    $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+    $btn.setAttribute('title', text ? getString('SHOW_TRANSLATION') : getString('TRANSLATE_POST'))
+    $btn.setAttribute('aria-label', text ? getString('SHOW_TRANSLATION') : getString('TRANSLATE_POST'))
+    tweetDisplayState.set(tweetId, 'original')
+  }
+}
+
+async function executeHeaderTranslation($tweet, $btn, $primaryText, tweetId) {
+  if (!$btn || !tweetId) return
+
+  $btn.classList.remove('cpft-translate-state-original', 'cpft-translate-state-translated')
+  $btn.classList.add('cpft-translate-loading')
+  $btn.setAttribute('title', getString('TRANSLATING'))
+  $btn.setAttribute('aria-label', getString('TRANSLATING'))
+  $btn.replaceChildren(createLoadingSvg('cpft-translate-spinner'))
 
   try {
     let result = await fetchTweetTranslation(tweetId, 'en', (chunkText) => {
-      if (document.contains($container) && $container.getAttribute('data-cpft-translation-for') === tweetId) {
-        renderStreamingChunk($container, $primaryText, tweetId, chunkText)
+      if ($btn.isConnected) {
+        renderStreamingChunkInPlace($primaryText, tweetId, chunkText)
       }
     })
-    if (document.contains($container) && $container.getAttribute('data-cpft-translation-for') === tweetId) {
-      renderTranslationResult($container, $primaryText, tweetId, result)
+    if ($btn.isConnected) {
+      setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, result, 'translated')
     }
   } catch (err) {
-    if (document.contains($container) && $container.getAttribute('data-cpft-translation-for') === tweetId) {
+    if ($btn.isConnected) {
       let isRateLimit = err?.message === 'RATE_LIMITED'
-      renderTranslationError($container, $primaryText, tweetId, isRateLimit)
+      $btn.classList.remove('cpft-translate-loading')
+      $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+      $btn.replaceChildren(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+      $btn.setAttribute('title', isRateLimit ? 'Rate limit reached' : getString('TRANSLATION_FAILED'))
+      if ($primaryText) $primaryText.style.display = ''
+      let $parent = $primaryText?.parentNode
+      let $translatedText = $parent?.querySelector(`:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`)
+      if ($translatedText) $translatedText.style.display = 'none'
     }
   }
 }
@@ -5188,46 +5107,69 @@ function processTweetTranslation($tweet) {
   let { tweetId } = getTweetMetadata($tweet)
   if (!tweetId) return
 
-  let $existing = $primaryText.nextElementSibling
-  if ($existing && $existing.classList.contains('cpft-translation-container')) {
-    if ($existing.getAttribute('data-cpft-translation-for') === tweetId) {
+  let moreButtons = Array.from(
+    $tweet.querySelectorAll('[data-testid="caret"], button[aria-label="More"], button[data-slot="xds-menu-trigger"]')
+  ).filter($el => !quoteContainers.some($qc => $qc.contains($el)))
+  let $moreBtn = moreButtons[0]
+  if (!$moreBtn || !$moreBtn.parentNode) return
+
+  let $existingBtn = $moreBtn.parentNode.querySelector(':scope > .cpft-translate-header-btn')
+  if ($existingBtn) {
+    if ($existingBtn.getAttribute('data-cpft-translation-for') === tweetId) {
       let cached = getCachedTranslation(tweetId, 'en')
       if (cached) {
         let state = tweetDisplayState.get(tweetId) || 'translated'
-        if (state === 'translated' && $primaryText.style.display !== 'none') {
-          $primaryText.style.display = 'none'
-        } else if (state === 'original' && $primaryText.style.display === 'none') {
-          $primaryText.style.display = ''
-        }
+        setTweetTranslationDisplay($tweet, $existingBtn, $primaryText, tweetId, cached, state)
       }
       return
     }
-    $existing.remove()
+    $existingBtn.remove()
   }
 
-  let $parent = $primaryText.parentNode
-  if (!$parent) return
+  let $btn = document.createElement('button')
+  $btn.type = 'button'
+  $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+  $btn.setAttribute('role', 'button')
+  $btn.setAttribute('data-cpft-translation-for', tweetId)
+  $btn.setAttribute('data-cpft-tweet-id', tweetId)
+  $btn.setAttribute('aria-label', getString('TRANSLATE_POST'))
+  $btn.setAttribute('title', getString('TRANSLATE_POST'))
+  $btn.appendChild(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
 
-  let $container = document.createElement('div')
-  $container.className = 'cpft-translation-container'
-  $container.setAttribute('data-cpft-translation-for', tweetId)
-  $container.setAttribute('data-cpft-tweet-id', tweetId)
+  $btn.addEventListener('click', async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
 
-  $parent.insertBefore($container, $primaryText.nextSibling)
+    let cached = getCachedTranslation(tweetId, 'en')
+    if (cached) {
+      let currentState = tweetDisplayState.get(tweetId) || 'translated'
+      let nextState = currentState === 'translated' ? 'original' : 'translated'
+      setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, cached, nextState)
+      return
+    }
+
+    await executeHeaderTranslation($tweet, $btn, $primaryText, tweetId)
+  })
+
+  $moreBtn.parentNode.insertBefore($btn, $moreBtn)
 
   let cached = getCachedTranslation(tweetId, 'en')
   if (cached) {
-    renderTranslationResult($container, $primaryText, tweetId, cached)
+    let state = tweetDisplayState.get(tweetId) || 'translated'
+    setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, cached, state)
     return
   }
 
   if (config.tweetTranslation === 'auto' && isConfidentlyNonEnglish($primaryText)) {
-    renderLoadingState($container)
-    getTranslationObserver().observe($container)
+    $btn.classList.add('cpft-translate-loading')
+    $btn.setAttribute('title', getString('TRANSLATING'))
+    $btn.setAttribute('aria-label', getString('TRANSLATING'))
+    $btn.replaceChildren(createLoadingSvg('cpft-translate-spinner'))
+    getTranslationObserver().observe($btn)
     return
   }
 
-  renderTranslateTrigger($container, $primaryText, tweetId)
+  setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, null, 'original')
 }
 //#endregion
 
@@ -6949,55 +6891,54 @@ const configureCss = (() => {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    .cpft-translation-container {
-      margin-top: 2px;
-      margin-bottom: 2px;
-      font-family: inherit;
-      user-select: text;
-    }
-    .cpft-translate-trigger {
-      display: inline-flex;
-      align-items: center;
-    }
-    .cpft-translate-btn {
+    .cpft-translate-header-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 26px;
-      height: 26px;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      min-height: 28px;
       padding: 0;
-      margin: 2px 0;
+      margin: 0;
       border: none;
       border-radius: 9999px;
       background: transparent;
-      color: rgb(29, 155, 240);
       cursor: pointer;
-      transition: background-color 0.15s ease, color 0.15s ease;
       outline: none;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      align-self: center;
     }
-    .cpft-translate-btn:hover {
-      background-color: rgba(29, 155, 240, 0.12);
+    .cpft-translate-header-btn.cpft-translate-state-original {
+      color: #1D9BF0;
     }
-    .cpft-translate-icon {
-      width: 16px;
-      height: 16px;
+    .cpft-translate-header-btn.cpft-translate-state-original:hover {
+      background-color: rgba(29, 155, 240, 0.1);
+      color: #1D9BF0;
+    }
+    .cpft-translate-header-btn.cpft-translate-state-translated {
+      color: #71767B;
+    }
+    .cpft-translate-header-btn.cpft-translate-state-translated:hover {
+      background-color: rgba(239, 243, 244, 0.1);
+      color: #e7e9ea;
+    }
+    .cpft-translate-header-btn .cpft-translate-icon {
+      width: 17px;
+      height: 17px;
       fill: currentColor;
     }
-    .cpft-translate-loading {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 26px;
-      height: 26px;
-      margin: 2px 0;
-      color: rgb(29, 155, 240);
+    .cpft-translate-header-btn.cpft-translate-loading {
+      color: #1D9BF0;
     }
-    .cpft-translate-spinner {
+    .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner {
       width: 16px;
       height: 16px;
       animation: cpft_spin 0.75s linear infinite;
     }
-    .cpft-translate-spinner circle {
+    .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner circle {
       stroke: currentColor;
       stroke-dasharray: 40;
       stroke-dashoffset: 15;
@@ -7007,66 +6948,6 @@ const configureCss = (() => {
       user-select: text;
       white-space: pre-wrap;
       word-break: break-word;
-      margin-bottom: 4px;
-    }
-    .cpft-translation-attribution {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 2px;
-      margin-bottom: 2px;
-      font-size: 13px;
-      line-height: 16px;
-      color: var(--cpft-text-secondary, rgb(113, 118, 123));
-      user-select: none;
-    }
-    .cpft-translation-meta {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .cpft-translation-grok-icon {
-      width: 13px;
-      height: 13px;
-      fill: currentColor;
-      opacity: 0.85;
-    }
-    .cpft-translation-separator {
-      color: var(--cpft-text-secondary, rgb(113, 118, 123));
-      opacity: 0.6;
-    }
-    .cpft-translation-toggle {
-      background: none;
-      border: none;
-      padding: 0;
-      margin: 0;
-      cursor: pointer;
-      color: rgb(29, 155, 240);
-      font-size: 13px;
-      line-height: 16px;
-      text-decoration: none;
-      outline: none;
-    }
-    .cpft-translation-toggle:hover {
-      text-decoration: underline;
-    }
-    .cpft-translate-error {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      line-height: 20px;
-      color: rgb(244, 33, 46);
-    }
-    .cpft-translate-retry-btn {
-      background: none;
-      border: none;
-      padding: 0;
-      cursor: pointer;
-      color: rgb(29, 155, 240);
-      font-size: 13px;
-      text-decoration: underline;
-      outline: none;
     }
     `)
 
@@ -12930,14 +12811,9 @@ function configChanged(changes) {
       })
       teardownAutoExpandCaptions()
       teardownAutoTranslation()
-      document.querySelectorAll('.cpft-translation-container').forEach(el => {
-        let $parent = el.parentNode
-        let $primaryText = $parent?.querySelector(TWEET_TEXT_SELECTOR)
-        if ($primaryText) {
-          $primaryText.style.display = ''
-        }
-        el.remove()
-      })
+      document.querySelectorAll('.cpft-translate-header-btn').forEach(btn => btn.remove())
+      document.querySelectorAll('.cpft-translated-text').forEach(el => el.remove())
+      document.querySelectorAll(TWEET_TEXT_SELECTOR).forEach(el => { el.style.display = '' })
       disconnectObservers(modalObservers, 'modal')
       disconnectObservers(pageObservers, 'page')
       disconnectObservers(globalObservers, 'global')
@@ -12979,14 +12855,9 @@ function configChanged(changes) {
   }
   if ('tweetTranslation' in changes) {
     teardownAutoTranslation()
-    document.querySelectorAll('.cpft-translation-container').forEach(el => {
-      let $parent = el.parentNode
-      let $primaryText = $parent?.querySelector(TWEET_TEXT_SELECTOR)
-      if ($primaryText) {
-        $primaryText.style.display = ''
-      }
-      el.remove()
-    })
+    document.querySelectorAll('.cpft-translate-header-btn').forEach(btn => btn.remove())
+    document.querySelectorAll('.cpft-translated-text').forEach(el => el.remove())
+    document.querySelectorAll(TWEET_TEXT_SELECTOR).forEach(el => { el.style.display = '' })
     if (config.tweetTranslation !== 'off') {
       let tweets = document.querySelectorAll(Selectors.TWEET)
       for (let t of tweets) processTweetTranslation(t)

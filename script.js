@@ -2354,6 +2354,7 @@ const Selectors = {
 
 /** @enum {string} */
 const Svgs = {
+  SUCCESS_PATH: 'M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z',
   DOWNLOAD_PATH: 'M12 2.5a.75.75 0 0 1 .75.75v10.19l3.72-3.72a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-5-5a.75.75 0 1 1 1.06-1.06l3.72 3.72V3.25A.75.75 0 0 1 12 2.5ZM3.75 18a.75.75 0 0 1 .75.75v1.5c0 .414.336.75.75.75h13.5a.75.75 0 0 1 .75-.75v-1.5a.75.75 0 0 1 1.5 0v1.5A2.25 2.25 0 0 1 18.75 22H5.25A2.25 2.25 0 0 1 3 19.75v-1.5a.75.75 0 0 1 .75-.75Z',
   BLUE_LOGO_PATH: 'M16.5 3H2v18h15c3.038 0 5.5-2.46 5.5-5.5 0-1.4-.524-2.68-1.385-3.65-.08-.09-.089-.22-.023-.32.574-.87.908-1.91.908-3.03C22 5.46 19.538 3 16.5 3zm-.796 5.99c.457-.05.892-.17 1.296-.35-.302.45-.684.84-1.125 1.15.004.1.006.19.006.29 0 2.94-2.269 6.32-6.421 6.32-1.274 0-2.46-.37-3.459-1 .177.02.357.03.539.03 1.057 0 2.03-.35 2.803-.95-.988-.02-1.821-.66-2.109-1.54.138.03.28.04.425.04.206 0 .405-.03.595-.08-1.033-.2-1.811-1.1-1.811-2.18v-.03c.305.17.652.27 1.023.28-.606-.4-1.004-1.08-1.004-1.85 0-.4.111-.78.305-1.11 1.113 1.34 2.775 2.22 4.652 2.32-.038-.17-.058-.33-.058-.51 0-1.23 1.01-2.22 2.256-2.22.649 0 1.235.27 1.647.7.514-.1.997-.28 1.433-.54-.168.52-.526.96-.992 1.23z',
   MUTE: '<g><path d="M18 6.59V1.2L8.71 7H5.5C4.12 7 3 8.12 3 9.5v5C3 15.88 4.12 17 5.5 17h2.09l-2.3 2.29 1.42 1.42 15.5-15.5-1.42-1.42L18 6.59zm-8 8V8.55l6-3.75v3.79l-6 6zM5 9.5c0-.28.22-.5.5-.5H8v6H5.5c-.28 0-.5-.22-.5-.5v-5zm6.5 9.24l1.45-1.45L16 19.2V14l2 .02v8.78l-6.5-4.06z"></path></g>',
@@ -4601,7 +4602,7 @@ function createSvgIcon(pathData, className) {
   svg.setAttribute('aria-hidden', 'true')
   if (className) svg.setAttribute('class', className)
   let path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('d', pathData)
+  if (pathData) path.setAttribute('d', pathData)
   svg.appendChild(path)
   return svg
 }
@@ -5111,11 +5112,31 @@ function processTweetTranslation($tweet) {
     $tweet.querySelectorAll('[data-testid="caret"], button[aria-label="More"], button[data-slot="xds-menu-trigger"]')
   ).filter($el => !quoteContainers.some($qc => $qc.contains($el)))
   let $moreBtn = moreButtons[0]
-  if (!$moreBtn || !$moreBtn.parentNode) return
+  if (!$moreBtn || !$moreBtn.parentNode) {
+    if (!$tweet._cpftTranslationWaiting) {
+      $tweet._cpftTranslationWaiting = true
+      let observer = new MutationObserver(() => {
+        let foundMore = Array.from(
+          $tweet.querySelectorAll('[data-testid="caret"], button[aria-label="More"], button[data-slot="xds-menu-trigger"]')
+        ).filter($el => !quoteContainers.some($qc => $qc.contains($el)))[0]
+        if (foundMore && foundMore.parentNode) {
+          observer.disconnect()
+          delete $tweet._cpftTranslationWaiting
+          processTweetTranslation($tweet)
+        }
+      })
+      observer.observe($tweet, {childList: true, subtree: true})
+      setTimeout(() => {
+        observer.disconnect()
+        delete $tweet._cpftTranslationWaiting
+      }, 2000)
+    }
+    return
+  }
 
   let $existingBtn = $moreBtn.parentNode.querySelector(':scope > .cpft-translate-header-btn')
   if ($existingBtn) {
-    if ($existingBtn.getAttribute('data-cpft-translation-for') === tweetId) {
+    if ($existingBtn.getAttribute('data-cpft-translation-for') === tweetId && $existingBtn.querySelector('svg')) {
       let cached = getCachedTranslation(tweetId, 'en')
       if (cached) {
         let state = tweetDisplayState.get(tweetId) || 'translated'
@@ -11916,10 +11937,11 @@ async function tweakFocusedTweet($focusedTweet, options) {
     $actionBar.id = 'cpftFocusedTweetActionBar'
     restoreTweetInteractionsLinks({$actionBar, $focusedTweet, tweetInfo, isOwnTweet})
     addDownloadButton($focusedTweet)
-    processTweetTranslation($focusedTweet)
   } else {
     warn('focused tweet action bar not found')
   }
+
+  processTweetTranslation($focusedTweet)
 
   processTweetMediaCarousel($focusedTweet)
   processSingleVideoMedia($focusedTweet)

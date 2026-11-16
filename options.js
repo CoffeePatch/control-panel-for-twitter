@@ -189,6 +189,11 @@ for (let translationId of [
   'sortRepliesLabel',
   'timelineAlignmentLabel',
   'timelineWidthLabel',
+  'tweetTranslationLabel',
+  'tweetTranslationOption_off',
+  'tweetTranslationOption_manual',
+  'tweetTranslationOption_auto',
+  'tweetTranslationInfo',
   'mediaViewLabel',
   'mediaViewInfo',
   'mediaViewDefaultOption',
@@ -360,6 +365,7 @@ const defaultConfig = {
   showPremiumReplyGovernment: true,
   sortFollowing: 'mostRecent',
   sortReplies: 'relevant',
+  tweetTranslation: 'manual',
   tweakNewLayout: false,
   tweakQuoteTweetsPage: true,
   twitterBlueChecks: 'replace',
@@ -1310,6 +1316,9 @@ function main() {
     }
     if (!storedConfig.downloadIconPosition) {
       storedConfig.downloadIconPosition = 'left'
+    }
+    if (!storedConfig.tweetTranslation) {
+      storedConfig.tweetTranslation = 'manual'
     }
     optionsConfig = { ...defaultConfig, ...storedConfig }
 

@@ -171,6 +171,7 @@ const config = {
   disableHomeTimeline: false,
   disabledHomeTimelineRedirect: 'notifications',
   disableTweetTextFormatting: false,
+  tweetTranslation: 'manual',
   // Downloads
   downloadMedia: true,
   downloadFilenameFormat: '{yyyy}-{mm}-{dd}-{hh}-{MM}-{ss}-{ms}-{username}-{tweet_id}',
@@ -688,6 +689,7 @@ const locales = {
     ADD_ANOTHER_TWEET: 'Add another Tweet',
     ADD_MUTED_WORD: 'Add muted word',
     GROK_ACTIONS: 'Grok actions',
+    HIDE_TRANSLATION: 'Hide translation',
     HOME: 'Home',
     LIKES: 'Likes',
     LIVE_ON_X: 'Live on X',
@@ -705,6 +707,7 @@ const locales = {
     RELEVANT: 'Relevant',
     REPOST: 'Repost',
     REPOSTS: 'Reposts',
+    RETRY: 'Retry',
     RETWEET: 'Retweet',
     RETWEETED_BY: 'Retweeted by',
     RETWEETS: 'Retweets',
@@ -712,8 +715,15 @@ const locales = {
     SHARED_TWEETS: 'Shared Tweets',
     SHOW: 'Show',
     SHOW_MORE_REPLIES: 'Show more replies',
+    SHOW_TRANSLATION: 'Show translation',
+    SHOW_ORIGINAL: 'Show original',
     SORT_BY: 'Sort by',
     SORT_REPLIES: 'Sort replies',
+    TRANSLATE_POST: 'Translate post',
+    TRANSLATED: 'Translated from',
+    TRANSLATED_BY: 'Translated by',
+    TRANSLATING: 'Translating…',
+    TRANSLATION_FAILED: 'Translation failed',
     TURN_OFF_QUOTE_TWEETS: 'Turn off Quote Tweets',
     TURN_OFF_RETWEETS: 'Turn off Retweets',
     TURN_ON_RETWEETS: 'Turn on Retweets',
@@ -2344,12 +2354,14 @@ const Selectors = {
 
 /** @enum {string} */
 const Svgs = {
+  SUCCESS_PATH: 'M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z',
   DOWNLOAD_PATH: 'M12 2.5a.75.75 0 0 1 .75.75v10.19l3.72-3.72a.75.75 0 1 1 1.06 1.06l-5 5a.75.75 0 0 1-1.06 0l-5-5a.75.75 0 1 1 1.06-1.06l3.72 3.72V3.25A.75.75 0 0 1 12 2.5ZM3.75 18a.75.75 0 0 1 .75.75v1.5c0 .414.336.75.75.75h13.5a.75.75 0 0 1 .75-.75v-1.5a.75.75 0 0 1 1.5 0v1.5A2.25 2.25 0 0 1 18.75 22H5.25A2.25 2.25 0 0 1 3 19.75v-1.5a.75.75 0 0 1 .75-.75Z',
   BLUE_LOGO_PATH: 'M16.5 3H2v18h15c3.038 0 5.5-2.46 5.5-5.5 0-1.4-.524-2.68-1.385-3.65-.08-.09-.089-.22-.023-.32.574-.87.908-1.91.908-3.03C22 5.46 19.538 3 16.5 3zm-.796 5.99c.457-.05.892-.17 1.296-.35-.302.45-.684.84-1.125 1.15.004.1.006.19.006.29 0 2.94-2.269 6.32-6.421 6.32-1.274 0-2.46-.37-3.459-1 .177.02.357.03.539.03 1.057 0 2.03-.35 2.803-.95-.988-.02-1.821-.66-2.109-1.54.138.03.28.04.425.04.206 0 .405-.03.595-.08-1.033-.2-1.811-1.1-1.811-2.18v-.03c.305.17.652.27 1.023.28-.606-.4-1.004-1.08-1.004-1.85 0-.4.111-.78.305-1.11 1.113 1.34 2.775 2.22 4.652 2.32-.038-.17-.058-.33-.058-.51 0-1.23 1.01-2.22 2.256-2.22.649 0 1.235.27 1.647.7.514-.1.997-.28 1.433-.54-.168.52-.526.96-.992 1.23z',
   MUTE: '<g><path d="M18 6.59V1.2L8.71 7H5.5C4.12 7 3 8.12 3 9.5v5C3 15.88 4.12 17 5.5 17h2.09l-2.3 2.29 1.42 1.42 15.5-15.5-1.42-1.42L18 6.59zm-8 8V8.55l6-3.75v3.79l-6 6zM5 9.5c0-.28.22-.5.5-.5H8v6H5.5c-.28 0-.5-.22-.5-.5v-5zm6.5 9.24l1.45-1.45L16 19.2V14l2 .02v8.78l-6.5-4.06z"></path></g>',
   PROMOTED_PATH: 'M19.498 3h-15c-1.381 0-2.5 1.12-2.5 2.5v13c0 1.38 1.119 2.5 2.5 2.5h15c1.381 0 2.5-1.12 2.5-2.5v-13c0-1.38-1.119-2.5-2.5-2.5zm-3.502 12h-2v-3.59l-5.293 5.3-1.414-1.42L12.581 10H8.996V8h7v7z',
   RETWEET: '<g><path d="M4.5 3.88l4.432 4.14-1.364 1.46L5.5 7.55V16c0 1.1.896 2 2 2H13v2H7.5c-2.209 0-4-1.79-4-4V7.55L1.432 9.48.068 8.02 4.5 3.88zM16.5 6H11V4h5.5c2.209 0 4 1.79 4 4v8.45l2.068-1.93 1.364 1.46-4.432 4.14-4.432-4.14 1.364-1.46 2.068 1.93V8c0-1.1-.896-2-2-2z"></path></g>',
   RETWEETS_OFF: '<g><path d="M3.707 21.707l18-18-1.414-1.414-2.088 2.088C17.688 4.137 17.11 4 16.5 4H11v2h5.5c.028 0 .056 0 .084.002l-10.88 10.88c-.131-.266-.204-.565-.204-.882V7.551l2.068 1.93 1.365-1.462L4.5 3.882.068 8.019l1.365 1.462 2.068-1.93V16c0 .871.278 1.677.751 2.334l-1.959 1.959 1.414 1.414zM18.5 9h2v7.449l2.068-1.93 1.365 1.462-4.433 4.137-4.432-4.137 1.365-1.462 2.067 1.93V9zm-8.964 9l-2 2H13v-2H9.536z"></path></g>',
+  TRANSLATE_PATH: 'M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z',
   TWITTER_FEATHER_PLUS_PATH: 'M23 3c-6.62-.1-10.38 2.421-13.05 6.03C7.29 12.61 6 17.331 6 22h2c0-1.007.07-2.012.19-3H12c4.1 0 7.48-3.082 7.94-7.054C22.79 10.147 23.17 6.359 23 3zm-7 8h-1.5v2H16c.63-.016 1.2-.08 1.72-.188C16.95 15.24 14.68 17 12 17H8.55c.57-2.512 1.57-4.851 3-6.78 2.16-2.912 5.29-4.911 9.45-5.187C20.95 8.079 19.9 11 16 11zM4 9V6H1V4h3V1h2v3h3v2H6v3H4z',
   TWITTER_HOME_ACTIVE_PATH: 'M12 1.696L.622 8.807l1.06 1.696L3 9.679V19.5C3 20.881 4.119 22 5.5 22h13c1.381 0 2.5-1.119 2.5-2.5V9.679l1.318.824 1.06-1.696L12 1.696zM12 16.5c-1.933 0-3.5-1.567-3.5-3.5s1.567-3.5 3.5-3.5 3.5 1.567 3.5 3.5-1.567 3.5-3.5 3.5z',
   TWITTER_HOME_INACTIVE_PATH: 'M12 9c-2.209 0-4 1.791-4 4s1.791 4 4 4 4-1.791 4-4-1.791-4-4-4zm0 6c-1.105 0-2-.895-2-2s.895-2 2-2 2 .895 2 2-.895 2-2 2zm0-13.304L.622 8.807l1.06 1.696L3 9.679V19.5C3 20.881 4.119 22 5.5 22h13c1.381 0 2.5-1.119 2.5-2.5V9.679l1.318.824 1.06-1.696L12 1.696zM19 19.5c0 .276-.224.5-.5.5h-13c-.276 0-.5-.224-.5-.5V8.429l7-4.375 7 4.375V19.5z',
@@ -4590,7 +4602,7 @@ function createSvgIcon(pathData, className) {
   svg.setAttribute('aria-hidden', 'true')
   if (className) svg.setAttribute('class', className)
   let path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('d', pathData)
+  if (pathData) path.setAttribute('d', pathData)
   svg.appendChild(path)
   return svg
 }
@@ -4740,6 +4752,7 @@ function tweakMediaModal($modal) {
     let $tweets = $modal.querySelectorAll(Selectors.TWEET)
     for (let $tweet of $tweets) {
       addDownloadButton($tweet)
+      processTweetTranslation($tweet)
       if (config.autoExpandCaptions) {
         expandTweetCaptions($tweet)
       }
@@ -4766,6 +4779,420 @@ function tweakMediaModal($modal) {
     observers: modalObservers,
   })
 }
+
+//#region Tweet translation
+const translationCache = new Map()
+const MAX_TRANSLATION_CACHE = 500
+const tweetDisplayState = new Map()
+const inflightTranslations = new Map()
+let rateLimitCooldownUntil = 0
+let activeAutoRequests = 0
+const MAX_CONCURRENT_AUTO = 2
+const autoQueue = []
+let translationIntersectionObserver = null
+
+const NON_ENGLISH_SCRIPT_REGEX = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\u0900-\u0D7F\u0E00-\u0E7F\u0370-\u03FF\u0400-\u04FF\u0590-\u05FF\u3040-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF]/
+
+function getCsrfToken() {
+  let match = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/)
+  return match ? match[1] : ''
+}
+
+function getCachedTranslation(tweetId, lang = 'en') {
+  const key = `${tweetId}:${lang}`
+  if (!translationCache.has(key)) return null
+  const value = translationCache.get(key)
+  translationCache.delete(key)
+  translationCache.set(key, value)
+  return value
+}
+
+function setCachedTranslation(tweetId, lang = 'en', text) {
+  const key = `${tweetId}:${lang}`
+  if (translationCache.has(key)) {
+    translationCache.delete(key)
+  } else if (translationCache.size >= MAX_TRANSLATION_CACHE) {
+    const oldestKey = translationCache.keys().next().value
+    if (oldestKey) translationCache.delete(oldestKey)
+  }
+  translationCache.set(key, text)
+}
+
+function isConfidentlyNonEnglish($tweetText) {
+  if (!$tweetText) return false
+  const lang = ($tweetText.getAttribute('lang') || '').toLowerCase().trim()
+  if (lang && !lang.startsWith('en') && lang !== 'und' && lang !== 'zxx') {
+    return true
+  }
+  const text = $tweetText.textContent || ''
+  return NON_ENGLISH_SCRIPT_REGEX.test(text)
+}
+
+async function fetchTweetTranslation(tweetId, dstLang = 'en', onChunk = null) {
+  const cacheKey = `${tweetId}:${dstLang}`
+  if (translationCache.has(cacheKey)) {
+    return translationCache.get(cacheKey)
+  }
+  if (inflightTranslations.has(cacheKey)) {
+    return inflightTranslations.get(cacheKey)
+  }
+
+  const promise = (async () => {
+    try {
+      if (Date.now() < rateLimitCooldownUntil) {
+        throw new Error('RATE_LIMITED')
+      }
+      const csrfToken = getCsrfToken()
+      if (!csrfToken) {
+        throw new Error('NO_CSRF_TOKEN')
+      }
+
+      const res = await fetch('/i/api/2/grok/translation.json', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+          'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+          'x-csrf-token': csrfToken,
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes',
+          'x-twitter-client-language': dstLang,
+        },
+        body: JSON.stringify({
+          content_type: 'POST',
+          id: tweetId,
+          dst_lang: dstLang,
+        })
+      })
+
+      if (res.status === 429) {
+        rateLimitCooldownUntil = Date.now() + 60000
+        throw new Error('RATE_LIMITED')
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP_${res.status}`)
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullText = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        let lines = buffer.split('\n')
+        buffer = lines.pop()
+        for (let line of lines) {
+          line = line.trim()
+          if (!line) continue
+          try {
+            const data = JSON.parse(line)
+            if (data?.result?.text) {
+              fullText += data.result.text
+              if (onChunk) onChunk(fullText)
+            }
+          } catch (_) {}
+        }
+      }
+      buffer += decoder.decode()
+      if (buffer && buffer.trim()) {
+        let lines = buffer.split('\n')
+        for (let line of lines) {
+          line = line.trim()
+          if (!line) continue
+          try {
+            const data = JSON.parse(line)
+            if (data?.result?.text) {
+              fullText += data.result.text
+              if (onChunk) onChunk(fullText)
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (!fullText) {
+        throw new Error('EMPTY_TRANSLATION')
+      }
+
+      setCachedTranslation(tweetId, dstLang, fullText)
+      return fullText
+    } finally {
+      inflightTranslations.delete(cacheKey)
+    }
+  })()
+
+  inflightTranslations.set(cacheKey, promise)
+  return promise
+}
+
+function queueAutoTranslation(task) {
+  autoQueue.push(task)
+  processAutoQueue()
+}
+
+async function processAutoQueue() {
+  if (activeAutoRequests >= MAX_CONCURRENT_AUTO || autoQueue.length === 0) return
+  if (config.tweetTranslation !== 'auto') {
+    autoQueue.length = 0
+    return
+  }
+  if (Date.now() < rateLimitCooldownUntil) {
+    setTimeout(processAutoQueue, Math.max(1000, rateLimitCooldownUntil - Date.now()))
+    return
+  }
+
+  const nextTask = autoQueue.shift()
+  if (!nextTask) return
+
+  activeAutoRequests++
+  try {
+    await nextTask()
+  } catch (err) {
+    // Handled in caller
+  } finally {
+    activeAutoRequests--
+    processAutoQueue()
+  }
+}
+
+const TWEET_TEXT_SELECTOR = '[data-testid="tweetText"], div.text-primary.whitespace-pre-wrap, div.whitespace-pre-wrap.wrap-anywhere'
+
+function getTranslationObserver() {
+  if (!translationIntersectionObserver) {
+    translationIntersectionObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const $btn = entry.target
+          translationIntersectionObserver?.unobserve($btn)
+          const tweetId = $btn.getAttribute('data-cpft-tweet-id')
+          if (tweetId && $btn.isConnected) {
+            queueAutoTranslation(async () => {
+              if (config.tweetTranslation === 'auto' && $btn.isConnected && $btn.getAttribute('data-cpft-tweet-id') === tweetId) {
+                let $tweet = $btn.closest(Selectors.TWEET) || $btn.closest('article')
+                if ($tweet) {
+                  let quoteContainers = getNestedQuoteContainers($tweet)
+                  let $tweetTexts = Array.from($tweet.querySelectorAll(TWEET_TEXT_SELECTOR)).filter(
+                    $el => !quoteContainers.some($qc => $qc.contains($el))
+                  )
+                  if ($tweetTexts.length > 0) {
+                    await executeHeaderTranslation($tweet, $btn, $tweetTexts[0], tweetId)
+                  }
+                }
+              }
+            })
+          }
+        }
+      }
+    }, {
+      rootMargin: '250px 0px',
+      threshold: 0.01,
+    })
+  }
+  return translationIntersectionObserver
+}
+
+function teardownAutoTranslation() {
+  if (translationIntersectionObserver) {
+    translationIntersectionObserver.disconnect()
+    translationIntersectionObserver = null
+  }
+  autoQueue.length = 0
+}
+
+function renderStreamingChunkInPlace($primaryText, tweetId, chunkText) {
+  if ($primaryText) {
+    $primaryText.style.display = 'none'
+  }
+  let $parent = $primaryText?.parentNode
+  if (!$parent) return
+
+  let $translatedText = $parent.querySelector(`:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`)
+  if (!$translatedText) {
+    $translatedText = document.createElement('div')
+    $translatedText.className = `cpft-translated-text ${$primaryText.className || ''}`
+    $translatedText.setAttribute('dir', 'auto')
+    $translatedText.setAttribute('data-cpft-translation-for', tweetId)
+    let compColor = window.getComputedStyle($primaryText).color
+    if (compColor) $translatedText.style.color = compColor
+    $parent.insertBefore($translatedText, $primaryText.nextSibling)
+  }
+  $translatedText.textContent = chunkText
+  $translatedText.style.display = ''
+}
+
+function setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, text, displayState) {
+  let $parent = $primaryText?.parentNode
+  if (!$parent) return
+
+  let $translatedText = $parent.querySelector(`:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`)
+  if (!$translatedText && text) {
+    $translatedText = document.createElement('div')
+    $translatedText.className = `cpft-translated-text ${$primaryText.className || ''}`
+    $translatedText.setAttribute('dir', 'auto')
+    $translatedText.setAttribute('data-cpft-translation-for', tweetId)
+    let compColor = window.getComputedStyle($primaryText).color
+    if (compColor) $translatedText.style.color = compColor
+    $parent.insertBefore($translatedText, $primaryText.nextSibling)
+  }
+
+  if ($translatedText && text) {
+    $translatedText.textContent = text
+  }
+
+  $btn.classList.remove('cpft-translate-loading')
+  $btn.replaceChildren(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+
+  if (displayState === 'translated') {
+    if ($primaryText) $primaryText.style.display = 'none'
+    if ($translatedText) $translatedText.style.display = ''
+    $btn.className = 'cpft-translate-header-btn cpft-translate-state-translated'
+    $btn.setAttribute('title', getString('SHOW_ORIGINAL'))
+    $btn.setAttribute('aria-label', getString('SHOW_ORIGINAL'))
+    tweetDisplayState.set(tweetId, 'translated')
+  } else {
+    if ($primaryText) $primaryText.style.display = ''
+    if ($translatedText) $translatedText.style.display = 'none'
+    $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+    $btn.setAttribute('title', text ? getString('SHOW_TRANSLATION') : getString('TRANSLATE_POST'))
+    $btn.setAttribute('aria-label', text ? getString('SHOW_TRANSLATION') : getString('TRANSLATE_POST'))
+    tweetDisplayState.set(tweetId, 'original')
+  }
+}
+
+async function executeHeaderTranslation($tweet, $btn, $primaryText, tweetId) {
+  if (!$btn || !tweetId) return
+
+  $btn.classList.remove('cpft-translate-state-original', 'cpft-translate-state-translated')
+  $btn.classList.add('cpft-translate-loading')
+  $btn.setAttribute('title', getString('TRANSLATING'))
+  $btn.setAttribute('aria-label', getString('TRANSLATING'))
+  $btn.replaceChildren(createLoadingSvg('cpft-translate-spinner'))
+
+  try {
+    let result = await fetchTweetTranslation(tweetId, 'en', (chunkText) => {
+      if ($btn.isConnected) {
+        renderStreamingChunkInPlace($primaryText, tweetId, chunkText)
+      }
+    })
+    if ($btn.isConnected) {
+      setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, result, 'translated')
+    }
+  } catch (err) {
+    if ($btn.isConnected) {
+      let isRateLimit = err?.message === 'RATE_LIMITED'
+      $btn.classList.remove('cpft-translate-loading')
+      $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+      $btn.replaceChildren(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+      $btn.setAttribute('title', isRateLimit ? 'Rate limit reached' : getString('TRANSLATION_FAILED'))
+      if ($primaryText) $primaryText.style.display = ''
+      let $parent = $primaryText?.parentNode
+      let $translatedText = $parent?.querySelector(`:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`)
+      if ($translatedText) $translatedText.style.display = 'none'
+    }
+  }
+}
+
+function processTweetTranslation($tweet) {
+  if (!config.enabled || config.tweetTranslation === 'off') return
+  if (!$tweet) return
+
+  let quoteContainers = getNestedQuoteContainers($tweet)
+  let $tweetTexts = Array.from($tweet.querySelectorAll(TWEET_TEXT_SELECTOR)).filter(
+    $el => !quoteContainers.some($qc => $qc.contains($el))
+  )
+  if ($tweetTexts.length === 0) return
+
+  let $primaryText = $tweetTexts[0]
+  let { tweetId } = getTweetMetadata($tweet)
+  if (!tweetId) return
+
+  let moreButtons = Array.from(
+    $tweet.querySelectorAll('[data-testid="caret"], button[aria-label="More"], button[data-slot="xds-menu-trigger"]')
+  ).filter($el => !quoteContainers.some($qc => $qc.contains($el)))
+  let $moreBtn = moreButtons[0]
+  if (!$moreBtn || !$moreBtn.parentNode) {
+    if (!$tweet._cpftTranslationWaiting) {
+      $tweet._cpftTranslationWaiting = true
+      let observer = new MutationObserver(() => {
+        let foundMore = Array.from(
+          $tweet.querySelectorAll('[data-testid="caret"], button[aria-label="More"], button[data-slot="xds-menu-trigger"]')
+        ).filter($el => !quoteContainers.some($qc => $qc.contains($el)))[0]
+        if (foundMore && foundMore.parentNode) {
+          observer.disconnect()
+          delete $tweet._cpftTranslationWaiting
+          processTweetTranslation($tweet)
+        }
+      })
+      observer.observe($tweet, {childList: true, subtree: true})
+      setTimeout(() => {
+        observer.disconnect()
+        delete $tweet._cpftTranslationWaiting
+      }, 2000)
+    }
+    return
+  }
+
+  let $existingBtn = $moreBtn.parentNode.querySelector(':scope > .cpft-translate-header-btn')
+  if ($existingBtn) {
+    if ($existingBtn.getAttribute('data-cpft-translation-for') === tweetId && $existingBtn.querySelector('svg')) {
+      let cached = getCachedTranslation(tweetId, 'en')
+      if (cached) {
+        let state = tweetDisplayState.get(tweetId) || 'translated'
+        setTweetTranslationDisplay($tweet, $existingBtn, $primaryText, tweetId, cached, state)
+      }
+      return
+    }
+    $existingBtn.remove()
+  }
+
+  let $btn = document.createElement('button')
+  $btn.type = 'button'
+  $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+  $btn.setAttribute('role', 'button')
+  $btn.setAttribute('data-cpft-translation-for', tweetId)
+  $btn.setAttribute('data-cpft-tweet-id', tweetId)
+  $btn.setAttribute('aria-label', getString('TRANSLATE_POST'))
+  $btn.setAttribute('title', getString('TRANSLATE_POST'))
+  $btn.appendChild(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+
+  $btn.addEventListener('click', async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    let cached = getCachedTranslation(tweetId, 'en')
+    if (cached) {
+      let currentState = tweetDisplayState.get(tweetId) || 'translated'
+      let nextState = currentState === 'translated' ? 'original' : 'translated'
+      setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, cached, nextState)
+      return
+    }
+
+    await executeHeaderTranslation($tweet, $btn, $primaryText, tweetId)
+  })
+
+  $moreBtn.parentNode.insertBefore($btn, $moreBtn)
+
+  let cached = getCachedTranslation(tweetId, 'en')
+  if (cached) {
+    let state = tweetDisplayState.get(tweetId) || 'translated'
+    setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, cached, state)
+    return
+  }
+
+  if (config.tweetTranslation === 'auto' && isConfidentlyNonEnglish($primaryText)) {
+    $btn.classList.add('cpft-translate-loading')
+    $btn.setAttribute('title', getString('TRANSLATING'))
+    $btn.setAttribute('aria-label', getString('TRANSLATING'))
+    $btn.replaceChildren(createLoadingSvg('cpft-translate-spinner'))
+    getTranslationObserver().observe($btn)
+    return
+  }
+
+  setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, null, 'original')
+}
+//#endregion
 
 //#region Horizontal media carousel
 const CAROUSEL_PREV_PATH = 'M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z'
@@ -6484,6 +6911,64 @@ const configureCss = (() => {
     @keyframes cpft_spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
+    }
+    .cpft-translate-header-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0;
+      margin: 0;
+      border: none;
+      border-radius: 9999px;
+      background: transparent;
+      cursor: pointer;
+      outline: none;
+      transition: background-color 0.15s ease, color 0.15s ease;
+      user-select: none;
+      -webkit-user-select: none;
+      align-self: center;
+    }
+    .cpft-translate-header-btn.cpft-translate-state-original {
+      color: #1D9BF0;
+    }
+    .cpft-translate-header-btn.cpft-translate-state-original:hover {
+      background-color: rgba(29, 155, 240, 0.1);
+      color: #1D9BF0;
+    }
+    .cpft-translate-header-btn.cpft-translate-state-translated {
+      color: #71767B;
+    }
+    .cpft-translate-header-btn.cpft-translate-state-translated:hover {
+      background-color: rgba(239, 243, 244, 0.1);
+      color: #e7e9ea;
+    }
+    .cpft-translate-header-btn .cpft-translate-icon {
+      width: 17px;
+      height: 17px;
+      fill: currentColor;
+    }
+    .cpft-translate-header-btn.cpft-translate-loading {
+      color: #1D9BF0;
+    }
+    .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner {
+      width: 16px;
+      height: 16px;
+      animation: cpft_spin 0.75s linear infinite;
+    }
+    .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner circle {
+      stroke: currentColor;
+      stroke-dasharray: 40;
+      stroke-dashoffset: 15;
+    }
+    .cpft-translated-text {
+      color: var(--cpft-text-primary, inherit);
+      user-select: text;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     `)
 
@@ -10226,6 +10711,7 @@ function onTimelineChange($timeline, page, options = {}) {
 
       if (!hideItem) {
         addDownloadButton($tweet)
+        processTweetTranslation($tweet)
         processTweetMediaCarousel($tweet)
         processSingleVideoMedia($tweet)
         if (config.autoExpandCaptions) {
@@ -10471,6 +10957,7 @@ function onIndividualTweetTimelineChange($timeline, options) {
 
       if (!hideItem) {
         addDownloadButton($tweet)
+        processTweetTranslation($tweet)
         processTweetMediaCarousel($tweet)
         processSingleVideoMedia($tweet)
         if (config.autoExpandCaptions) {
@@ -10798,6 +11285,7 @@ function processTwitterLogos($el) {
 
 function processCurrentPage() {
   disconnectObservers(pageObservers, 'page')
+  teardownAutoTranslation()
 
   // Hooks for styling pages
   if (!$body) $body = document.body
@@ -11453,6 +11941,8 @@ async function tweakFocusedTweet($focusedTweet, options) {
     warn('focused tweet action bar not found')
   }
 
+  processTweetTranslation($focusedTweet)
+
   processTweetMediaCarousel($focusedTweet)
   processSingleVideoMedia($focusedTweet)
   if (config.autoExpandCaptions) {
@@ -11557,6 +12047,7 @@ async function tweakIndividualTweetPage() {
       let $tweets = $primaryColumn.querySelectorAll(Selectors.TWEET)
       for (let $tweet of $tweets) {
         addDownloadButton($tweet)
+        processTweetTranslation($tweet)
         processTweetMediaCarousel($tweet)
         processSingleVideoMedia($tweet)
         if (config.autoExpandCaptions) {
@@ -12341,6 +12832,10 @@ function configChanged(changes) {
         delete el.dataset.cpftCarouselAttached
       })
       teardownAutoExpandCaptions()
+      teardownAutoTranslation()
+      document.querySelectorAll('.cpft-translate-header-btn').forEach(btn => btn.remove())
+      document.querySelectorAll('.cpft-translated-text').forEach(el => el.remove())
+      document.querySelectorAll(TWEET_TEXT_SELECTOR).forEach(el => { el.style.display = '' })
       disconnectObservers(modalObservers, 'modal')
       disconnectObservers(pageObservers, 'page')
       disconnectObservers(globalObservers, 'global')
@@ -12379,6 +12874,16 @@ function configChanged(changes) {
   }
   if ('openSelectedLinksInNewTab' in changes && !changes.openSelectedLinksInNewTab) {
     document.querySelectorAll('[data-cpft-menu-item="open-video-in-new-tab"]').forEach(el => el.remove())
+  }
+  if ('tweetTranslation' in changes) {
+    teardownAutoTranslation()
+    document.querySelectorAll('.cpft-translate-header-btn').forEach(btn => btn.remove())
+    document.querySelectorAll('.cpft-translated-text').forEach(el => el.remove())
+    document.querySelectorAll(TWEET_TEXT_SELECTOR).forEach(el => { el.style.display = '' })
+    if (config.tweetTranslation !== 'off') {
+      let tweets = document.querySelectorAll(Selectors.TWEET)
+      for (let t of tweets) processTweetTranslation(t)
+    }
   }
   if ('autoExpandCaptions' in changes) {
     if (config.autoExpandCaptions) {

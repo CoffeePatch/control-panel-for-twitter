@@ -1437,10 +1437,21 @@ function setupSettingsManagement() {
   if ($exportSettingsButton) {
     $exportSettingsButton.addEventListener('click', exportSettings)
   }
-  if ($importSettingsButton && $importSettingsInput) {
-    $importSettingsButton.addEventListener('click', () => {
-      $importSettingsInput.click()
+  if ($importSettingsButton) {
+    $importSettingsButton.addEventListener('click', (e) => {
+      if (document.body.classList.contains('browserAction')) {
+        e.preventDefault()
+        if (chrome.runtime.openOptionsPage) {
+          chrome.runtime.openOptionsPage()
+        } else {
+          window.open(chrome.runtime.getURL('options.html'))
+        }
+        return
+      }
+      $importSettingsInput?.click()
     })
+  }
+  if ($importSettingsInput) {
     $importSettingsInput.addEventListener('change', onImportFileSelected)
   }
 }

@@ -425,8 +425,9 @@ let $showBlueReplyFollowersCountLabel = /** @type {HTMLElement} */ (document.que
 
 //#region Utility functions
 function exportConfig() {
+  let manifestVersion = chrome.runtime.getManifest?.()?.version || '4.24.0'
   let $a = document.createElement('a')
-  $a.download = 'control-panel-for-twitter-v4.24.0.config.txt'
+  $a.download = `control-panel-for-twitter-v${manifestVersion}.config.txt`
   $a.href = URL.createObjectURL(new Blob([
     JSON.stringify(optionsConfig, null, 2)
   ], { type: 'text/plain' }))
@@ -688,7 +689,7 @@ function updateFormControls() {
 }
 
 function updateFormControl($control, value) {
-  if ($control instanceof RadioNodeList) {
+  if (typeof RadioNodeList !== 'undefined' && $control instanceof RadioNodeList) {
     // If a checkbox displays in multiple sections, update them all
     $control.forEach(input => /** @type {HTMLInputElement} */(input).checked = value)
   }
@@ -1073,6 +1074,27 @@ function setupOptionsSearch() {
 
 let settingsStatusTimeout = null
 
+/** Allowed enum values for string settings */
+const CONFIG_ENUMS = {
+  darkModeTheme: ['lightsOut', 'dim'],
+  disabledHomeTimelineRedirect: ['notifications', 'messages'],
+  downloadVideoQuality: ['highest', 'lowest'],
+  downloadIconPosition: ['left', 'right'],
+  timelineWidth: ['default', '650', '700', '750', '800', 'full'],
+  timelineAlignment: ['default', 'left', 'center', 'right'],
+  showLabels: ['always', 'hover', 'never'],
+  followButtonStyle: ['monochrome', 'themed'],
+  hideNotifications: ['ignore', 'badges', 'hide'],
+  listRetweets: ['ignore', 'hide'],
+  quoteTweets: ['separate', 'hide', 'ignore'],
+  retweets: ['separate', 'hide', 'ignore'],
+  mediaView: ['default', 'grid', 'full'],
+  sortFollowing: ['mostRecent', 'popular', 'ignore'],
+  sortReplies: ['relevant', 'recent', 'liked'],
+  twitterBlueChecks: ['ignore', 'replace', 'hide'],
+  navDensity: ['default', 'comfortable', 'compact'],
+}
+
 /**
  * Display a temporary status message in the Settings group.
  * @param {string} message
@@ -1133,6 +1155,256 @@ function exportSettings() {
 }
 
 /**
+ * Validates and normalizes an individual setting value against defaultConfig.
+ * @param {string} key
+ * @param {any} val
+ * @returns {{ valid: boolean, value?: any, reason?: string }}
+ */
+function validateSettingValue(key, val) {
+  if (key === 'version') {
+    return { valid: false, reason: 'runtime_version' }
+  }
+  if (!(key in defaultConfig)) {
+    return { valid: false, reason: 'unknown' }
+  }
+
+  // Handle known legacy migrations on raw value before validation
+  if (key === 'twitterBlueChecks' && val === 'dim') {
+    val = 'replace'
+  }
+  if (key === 'mediaView' && val === 'carousel') {
+    val = 'default'
+  }
+  if (key === 'downloadFilenameFormat' && typeof val === 'string') {
+    val = normalizeFilenameTemplate(val)
+  }
+
+  let defaultVal = defaultConfig[key]
+  if (typeof defaultVal === 'boolean') {
+    return typeof val === 'boolean'
+      ? { valid: true, value: val }
+      : { valid: false, reason: 'invalid_type' }
+  }
+
+  if (Array.isArray(defaultVal)) {
+    if (!Array.isArray(val)) {
+      return { valid: false, reason: 'invalid_type' }
+    }
+    if (key === 'hideQuotesFrom') {
+      let allStrings = val.every(item => typeof item === 'string')
+      return allStrings
+        ? { valid: true, value: val }
+        : { valid: false, reason: 'invalid_array_element' }
+    }
+    if (key === 'mutedQuotes') {
+      let allValidQuotes = val.every(item =>
+        item &&
+        typeof item === 'object' &&
+        typeof item.quotedBy === 'string' &&
+        typeof item.user === 'string' &&
+        typeof item.time === 'string'
+      )
+      return allValidQuotes
+        ? { valid: true, value: val }
+        : { valid: false, reason: 'invalid_array_element' }
+    }
+    return { valid: true, value: val }
+  }
+
+  if (typeof defaultVal === 'string') {
+    if (typeof val !== 'string') {
+      return { valid: false, reason: 'invalid_type' }
+    }
+    if (key in CONFIG_ENUMS) {
+      return CONFIG_ENUMS[key].includes(val)
+        ? { valid: true, value: val }
+        : { valid: false, reason: 'invalid_enum' }
+    }
+    return { valid: true, value: val }
+  }
+
+  return { valid: false, reason: 'unknown_type' }
+}
+
+/**
+ * Parses and verifies raw backup text, identifying format, version, and settings object.
+ * @param {string} content
+ * @returns {{
+ *   success: boolean,
+ *   errorKey?: string,
+ *   rawSettings?: Record<string, any>,
+ *   format?: 'enveloped' | 'raw',
+ *   version?: number
+ * }}
+ */
+function parseBackupContent(content) {
+  let parsed
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    return { success: false, errorKey: 'importSettingsInvalidJson' }
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    return { success: false, errorKey: 'importSettingsInvalidFormat' }
+  }
+
+  // 1. Enveloped format check
+  if ('format' in parsed) {
+    let validFormat = parsed.format === 'TweetEnhc Settings' || parsed.format === 'Control Panel for Twitter Settings'
+    if (!validFormat) {
+      return { success: false, errorKey: 'importSettingsInvalidFormat' }
+    }
+    if (typeof parsed.version !== 'number' || parsed.version < 1 || parsed.version > 1 || !Number.isInteger(parsed.version)) {
+      return { success: false, errorKey: 'importSettingsUnsupportedVersion' }
+    }
+    if (!parsed.settings || typeof parsed.settings !== 'object' || Array.isArray(parsed.settings)) {
+      return { success: false, errorKey: 'importSettingsInvalidFormat' }
+    }
+    return {
+      success: true,
+      rawSettings: parsed.settings,
+      format: 'enveloped',
+      version: parsed.version
+    }
+  }
+
+  // 2. Raw config JSON check
+  let keys = Object.keys(parsed)
+  let knownKeys = keys.filter(k => k in defaultConfig && k !== 'version')
+  let isRecognizedRaw = knownKeys.length >= 5 || (keys.length > 0 && keys.length <= 5 && knownKeys.length === keys.length && knownKeys.length >= 2)
+  if (!isRecognizedRaw) {
+    return { success: false, errorKey: 'importSettingsInvalidFormat' }
+  }
+
+  return {
+    success: true,
+    rawSettings: parsed,
+    format: 'raw',
+    version: 1
+  }
+}
+
+/**
+ * Processes backup content, validates settings, prompts for confirmation,
+ * and completely restores settings while resetting missing settings to defaults.
+ * @param {string} content
+ */
+function processImportContent(content) {
+  let parseResult = parseBackupContent(content)
+  if (!parseResult.success) {
+    showSettingsStatus(chrome.i18n.getMessage(parseResult.errorKey) || 'Failed to import settings', 'error')
+    return
+  }
+
+  let rawSettings = parseResult.rawSettings
+  /** @type {Record<string, any>} */
+  let validValues = {}
+  let restoredKeys = []
+  let skippedKeys = []
+  let invalidKeys = []
+
+  for (let [key, val] of Object.entries(rawSettings)) {
+    if (key === 'version') continue
+    let res = validateSettingValue(key, val)
+    if (res.valid) {
+      validValues[key] = res.value
+      restoredKeys.push(key)
+    } else if (res.reason === 'unknown') {
+      skippedKeys.push(key)
+    } else {
+      invalidKeys.push(key)
+    }
+  }
+
+  // Reject empty or entirely invalid settings objects without overwriting or false success
+  if (restoredKeys.length === 0) {
+    showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat') || 'Failed to import settings: No valid settings found in backup', 'error')
+    return
+  }
+
+  // Confirmation before overwrite
+  let confirmMsg = chrome.i18n.getMessage('importSettingsConfirm') || 'Importing settings will overwrite your current configuration. Are you sure you want to proceed?'
+  if (!window.confirm(confirmMsg)) {
+    return
+  }
+
+  // Apply necessary legacy migrations if older settings were present without newer counterparts:
+  if (rawSettings.mediaView === undefined) {
+    if (rawSettings.horizontalMediaCarousel === true) {
+      validValues.mediaView = 'default'
+      validValues.enableMediaDrag = true
+      if (!restoredKeys.includes('mediaView')) restoredKeys.push('mediaView')
+      if (!restoredKeys.includes('enableMediaDrag')) restoredKeys.push('enableMediaDrag')
+    } else if (rawSettings.revertMediaCarousel === true) {
+      validValues.mediaView = 'grid'
+      if (!restoredKeys.includes('mediaView')) restoredKeys.push('mediaView')
+    }
+  } else if (rawSettings.mediaView === 'carousel' && rawSettings.enableMediaDrag === undefined) {
+    validValues.enableMediaDrag = true
+    if (!restoredKeys.includes('enableMediaDrag')) restoredKeys.push('enableMediaDrag')
+  }
+
+  // Synchronize revertMediaCarousel for upstream compatibility if not explicitly in backup
+  if (validValues.mediaView !== undefined && rawSettings.revertMediaCarousel === undefined) {
+    validValues.revertMediaCarousel = (validValues.mediaView === 'grid' || validValues.mediaView === 'full')
+  }
+
+  // Legacy full width content migration if timelineWidth is missing
+  if (rawSettings.fullWidthContent === true && rawSettings.timelineWidth === undefined) {
+    validValues.timelineWidth = 'full'
+    if (!restoredKeys.includes('timelineWidth')) restoredKeys.push('timelineWidth')
+  }
+
+  // Build complete configuration: restore present settings, reset omitted/invalid to defaults
+  /** @type {Record<string, any>} */
+  let completeConfig = {}
+  let defaultedKeys = []
+
+  for (let key of Object.keys(defaultConfig)) {
+    if (key === 'version') continue
+    if (key in validValues) {
+      completeConfig[key] = validValues[key]
+    } else {
+      completeConfig[key] = defaultConfig[key]
+      defaultedKeys.push(key)
+    }
+  }
+
+  chrome.storage.local.set(completeConfig, () => {
+    if (chrome.runtime.lastError) {
+      console.error('chrome.storage.local.set error:', chrome.runtime.lastError)
+      showSettingsStatus(chrome.i18n.getMessage('importSettingsError') || 'Failed to import settings: An unexpected error occurred', 'error')
+      return
+    }
+
+    // Update in-memory optionsConfig
+    for (let [k, v] of Object.entries(completeConfig)) {
+      optionsConfig[k] = v
+    }
+
+    $body.classList.toggle('debug', optionsConfig.debug === true)
+    $experiments.open = Boolean(optionsConfig.customCss)
+    applyConfig()
+
+    let baseMsg = chrome.i18n.getMessage('importSettingsSuccess') || 'Settings imported successfully'
+    let details = [`${restoredKeys.length} restored`]
+    if (defaultedKeys.length > 0) {
+      details.push(`${defaultedKeys.length} reset to default`)
+    }
+    if (skippedKeys.length > 0) {
+      details.push(`${skippedKeys.length} unknown skipped`)
+    }
+    if (invalidKeys.length > 0) {
+      details.push(`${invalidKeys.length} invalid skipped`)
+    }
+    let fullMsg = `${baseMsg} (${details.join(', ')})`
+
+    showSettingsStatus(fullMsg, 'success')
+  })
+}
+
+/**
  * Handle import settings file selection.
  * @param {Event} e
  */
@@ -1147,114 +1419,15 @@ function onImportFileSelected(e) {
   reader.onload = (event) => {
     try {
       let content = /** @type {string} */ (event.target?.result)
-      let parsed
-      try {
-        parsed = JSON.parse(content)
-      } catch {
-        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidJson'), 'error')
-        return
-      }
-
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat'), 'error')
-        return
-      }
-
-      // Format identifier check
-      let validFormat = parsed.format === 'TweetEnhc Settings' || parsed.format === 'Control Panel for Twitter Settings'
-      if (!validFormat) {
-        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat'), 'error')
-        return
-      }
-
-      // Version check (only version 1 is currently supported)
-      if (typeof parsed.version !== 'number' || parsed.version > 1 || parsed.version < 1) {
-        showSettingsStatus(chrome.i18n.getMessage('importSettingsUnsupportedVersion'), 'error')
-        return
-      }
-
-      let importedSettings = parsed.settings
-      if (!importedSettings || typeof importedSettings !== 'object' || Array.isArray(importedSettings)) {
-        showSettingsStatus(chrome.i18n.getMessage('importSettingsInvalidFormat'), 'error')
-        return
-      }
-
-      // Confirmation before overwrite
-      let confirmMsg = chrome.i18n.getMessage('importSettingsConfirm') || 'Importing settings will overwrite your current configuration. Are you sure you want to proceed?'
-      if (!window.confirm(confirmMsg)) {
-        return
-      }
-
-      // Sanitize and validate imported settings against defaultConfig
-      /** @type {Partial<import("./types").Config>} */
-      let sanitized = {}
-
-      for (let [key, val] of Object.entries(importedSettings)) {
-        // Exclude platform-specific runtime version property and unknown keys
-        if (key === 'version' || !(key in defaultConfig)) continue
-
-        let defaultVal = defaultConfig[key]
-        let defaultType = typeof defaultVal
-
-        if (defaultType === 'boolean') {
-          if (typeof val === 'boolean') {
-            sanitized[key] = val
-          }
-        } else if (defaultType === 'string') {
-          if (typeof val === 'string') {
-            sanitized[key] = val
-          }
-        } else if (defaultType === 'number') {
-          if (typeof val === 'number') {
-            sanitized[key] = val
-          }
-        } else if (Array.isArray(defaultVal)) {
-          if (Array.isArray(val)) {
-            sanitized[key] = val
-          }
-        }
-      }
-
-      // Handle legacy or derived config values
-      // @ts-ignore
-      if (sanitized.twitterBlueChecks === 'dim') {
-        sanitized.twitterBlueChecks = 'replace'
-      }
-      if (sanitized.fullWidthContent && !sanitized.timelineWidth) {
-        sanitized.timelineWidth = 'full'
-      }
-      if (sanitized.mediaView === 'carousel') {
-        sanitized.mediaView = 'default'
-        if (sanitized.enableMediaDrag === undefined) sanitized.enableMediaDrag = true
-      }
-      if (sanitized.mediaView) {
-        let isGrid = sanitized.mediaView === 'grid'
-        let isFull = sanitized.mediaView === 'full'
-        sanitized.horizontalMediaCarousel = false
-        sanitized.revertMediaCarousel = isGrid || isFull
-      }
-
-      chrome.storage.local.set(sanitized, () => {
-        if (chrome.runtime.lastError) {
-          console.error('chrome.storage.local.set error:', chrome.runtime.lastError)
-          showSettingsStatus(chrome.i18n.getMessage('importSettingsError'), 'error')
-          return
-        }
-
-        Object.assign(optionsConfig, sanitized)
-        $body.classList.toggle('debug', optionsConfig.debug === true)
-        $experiments.open = Boolean(optionsConfig.customCss)
-        applyConfig()
-        showSettingsStatus(chrome.i18n.getMessage('importSettingsSuccess'), 'success')
-      })
+      processImportContent(content)
     } catch (err) {
       console.error('Import settings error:', err)
-      showSettingsStatus(chrome.i18n.getMessage('importSettingsError'), 'error')
+      showSettingsStatus(chrome.i18n.getMessage('importSettingsError') || 'Failed to import settings: An unexpected error occurred', 'error')
     }
   }
 
   reader.onerror = () => {
-    showSettingsStatus(chrome.i18n.getMessage('importSettingsError'), 'error')
+    showSettingsStatus(chrome.i18n.getMessage('importSettingsError') || 'Failed to import settings: An unexpected error occurred', 'error')
   }
 
   reader.readAsText(file)
@@ -1355,5 +1528,17 @@ function main() {
   })
 }
 
-main()
+if (typeof window !== 'undefined' && typeof chrome !== 'undefined' && chrome.storage) {
+  main()
+}
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    defaultConfig,
+    CONFIG_ENUMS,
+    validateSettingValue,
+    parseBackupContent,
+    processImportContent,
+  }
+}
 //#endregion

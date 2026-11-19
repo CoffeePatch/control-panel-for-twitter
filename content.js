@@ -145,4 +145,95 @@ window.addEventListener('message', (event) => {
     channel.postMessage({ type: 'initial', config })
   })
 })
+
+// Forward media download requests from page context to background service worker
+document.addEventListener('cpftDownloadMedia', (event) => {
+  const data = /** @type {any} */ (event).detail
+  if (!data || typeof data !== 'object') return
+  const { url, filename, subfolder } = data
+  if (typeof url !== 'string' || !url.startsWith('https://')) return
+
+  try {
+    const parsed = new URL(url)
+    const host = parsed.hostname.toLowerCase()
+    if (
+      host !== 'twimg.com' &&
+      !host.endsWith('.twimg.com') &&
+      host !== 'twitter.com' &&
+      !host.endsWith('.twitter.com') &&
+      host !== 'x.com' &&
+      !host.endsWith('.x.com')
+    ) {
+      console.warn('[CPFT] Download rejected: unauthorized domain', host)
+      return
+    }
+  } catch {
+    return
+  }
+
+  chrome.runtime.sendMessage(
+    {
+      type: 'DOWNLOAD_MEDIA',
+      url,
+      filename,
+      subfolder,
+    },
+    () => {
+      if (chrome.runtime.lastError) {
+        console.error('[CPFT] Download error:', chrome.runtime.lastError.message)
+      }
+    },
+  )
+})
+
+// Forward open in new tab requests from page context to background service worker
+document.addEventListener('cpftOpenTab', (event) => {
+  const data = /** @type {any} */ (event).detail
+  if (!data || typeof data !== 'object') return
+  const { url, active } = data
+  if (typeof url !== 'string' || (!url.startsWith('https://') && !url.startsWith('http://'))) return
+
+  try {
+    const parsed = new URL(url)
+    const host = parsed.hostname.toLowerCase()
+    if (
+      host !== 'twitter.com' &&
+      !host.endsWith('.twitter.com') &&
+      host !== 'x.com' &&
+      !host.endsWith('.x.com')
+    ) {
+      console.warn('[CPFT] Open tab rejected: unauthorized domain', host)
+      return
+    }
+  } catch {
+    return
+  }
+
+  chrome.runtime.sendMessage({
+    type: 'OPEN_TAB',
+    url,
+    active: Boolean(active),
+  })
+})
+
+// Store video diagnostic incidents from page context to extension storage
+document.addEventListener('cpftVideoDiagnosticIncident', (event) => {
+  const incident = /** @type {any} */ (event).detail
+  if (!incident || typeof incident !== 'object') return
+  chrome.storage.local.get(['cpft_video_diagnostic_incidents', 'settings'], (res) => {
+    const stored =
+      /** @type {{cpft_video_diagnostic_incidents?: any[], settings?: Partial<import('./types').UserSettings>}} */ (
+        res
+      )
+    if (stored.settings?.videoLayoutDiagnostics === false) return
+    let incidents = Array.isArray(stored.cpft_video_diagnostic_incidents)
+      ? stored.cpft_video_diagnostic_incidents
+      : []
+    // Deduplicate by incidentId if already recorded
+    if (incidents.some((i) => i.incidentId === incident.incidentId)) return
+    incidents.push(incident)
+    if (incidents.length > 10) incidents = incidents.slice(-10)
+    chrome.storage.local.set({ cpft_video_diagnostic_incidents: incidents })
+  })
+})
 //#endregion

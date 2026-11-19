@@ -680,6 +680,54 @@ function clearMutedWordsError() {
 /** @type {() => void} */
 let cancelPendingMutedWordsError
 
+function updateVideoDiagnosticsCount() {
+  const $count = document.getElementById('videoDiagnosticsCount')
+  if (!$count) return
+  chrome.storage.local.get(['cpft_video_diagnostic_incidents'], (stored) => {
+    const incidents = Array.isArray(stored.cpft_video_diagnostic_incidents)
+      ? stored.cpft_video_diagnostic_incidents
+      : []
+    $count.textContent = `${incidents.length} incident${incidents.length === 1 ? '' : 's'} recorded`
+  })
+}
+
+function exportVideoDiagnosticsReport() {
+  chrome.storage.local.get(['cpft_video_diagnostic_incidents'], (stored) => {
+    const incidents = Array.isArray(stored.cpft_video_diagnostic_incidents)
+      ? stored.cpft_video_diagnostic_incidents
+      : []
+    const manifestVersion = chrome.runtime.getManifest?.()?.version || '5.0.0'
+    const report = {
+      title: 'CPFT Video Layout Diagnostics Report',
+      timestamp: new Date().toISOString(),
+      extensionVersion: manifestVersion,
+      configSummary: {
+        videoLayoutDiagnostics: config.settings.videoLayoutDiagnostics,
+        tweetTranslation: config.settings.tweetTranslation,
+      },
+      incidentCount: incidents.length,
+      incidents,
+    }
+    const jsonStr = JSON.stringify(report, null, 2)
+    const blob = new Blob([jsonStr], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    const ts = new Date().toISOString().replace(/[:.]/g, '-')
+    a.download = `cpft-video-diagnostics-${ts}.json`
+    a.href = url
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  })
+}
+
+function clearVideoDiagnosticsRecords() {
+  chrome.storage.local.set({ cpft_video_diagnostic_incidents: [] }, () => {
+    updateVideoDiagnosticsCount()
+  })
+}
+
 /**
  * Listen for storage changes while the options page is open and update its
  * controls to reflect them. We only store settings the user has interacted
@@ -697,6 +745,9 @@ function onStorageChanged(storageChanges) {
       ...DEFAULT_SETTINGS,
       .../** @type {Partial<import('./types').UserSettings>} */ (settingsChanges),
     }
+  }
+  if (Object.hasOwn(storageChanges, 'cpft_video_diagnostic_incidents')) {
+    updateVideoDiagnosticsCount()
   }
   applyConfig()
 }
@@ -1139,6 +1190,16 @@ async function main() {
   if (config.settings.mutedWordsError) {
     showMutedWordsError(validateMuteRegExps(config.settings.mutedWords))
   }
+
+  const $exportVideoDiag = document.getElementById('exportVideoDiagnostics')
+  if ($exportVideoDiag) {
+    $exportVideoDiag.addEventListener('click', exportVideoDiagnosticsReport)
+  }
+  const $clearVideoDiag = document.getElementById('clearVideoDiagnostics')
+  if ($clearVideoDiag) {
+    $clearVideoDiag.addEventListener('click', clearVideoDiagnosticsRecords)
+  }
+  updateVideoDiagnosticsCount()
 
   chrome.storage.onChanged.addListener(onStorageChanged)
 

@@ -98,9 +98,11 @@ export const DEFAULT_SETTINGS = {
   showPremiumReplyGovernment: true,
   sortReplies: 'relevant',
   themeFollowButtons: true,
+  tweetTranslation: 'manual',
   tweakQuoteTweetsPage: true,
   unblurSensitiveContent: false,
   uninvertFollowButtons: true,
+  videoLayoutDiagnostics: false,
   // Desktop only
   addUserHoverCardAccountLocation: true,
   fullWidthContent: false,

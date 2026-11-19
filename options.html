@@ -84,6 +84,13 @@
             <option value="separate"></option>
           </options-select>
         </section>
+        <section class="option select">
+          <options-select name="tweetTranslation" info>
+            <option value="off"></option>
+            <option value="manual"></option>
+            <option value="auto"></option>
+          </options-select>
+        </section>
         <section class="option checkbox rweb">
           <options-toggle name="mutableQuoteTweets"></options-toggle>
           <details id="hideQuotesFromDetails">
@@ -694,6 +701,28 @@
         </section>
         <section class="option action pro">
           <options-button name="openDebugTrace" label="Extensions Pro sync trace" button="Open"></options-button>
+        </section>
+      </div>
+    </section>
+    <section class="group labelled collapsible">
+      <label class="group-label" data-collapse-id="videoDiagnostics">
+        <svg class="group-disclosure" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" aria-hidden="true">
+          <path d="m6.24 8.999 3.614-3.613a.498.498 0 0 0 0-.707.5.5 0 0 0-.707 0L5.999 7.826 2.854 4.68a.5.5 0 0 0-.707.707L5.759 9l.481-.001z"/>
+        </svg>
+        <span id="videoDiagnosticsOptions">Video Layout Diagnostics</span>
+      </label>
+      <div class="options">
+        <section class="option checkbox">
+          <options-toggle name="videoLayoutDiagnostics" info></options-toggle>
+        </section>
+        <section class="option action">
+          <div id="videoDiagnosticsCount" style="margin: 4px 12px 8px; font-size: 13px; color: var(--color-text-secondary, #71767b);">
+            0 incidents recorded
+          </div>
+          <options-button name="exportVideoDiagnostics" label="Export diagnostic report" button="Export"></options-button>
+        </section>
+        <section class="option action">
+          <options-button name="clearVideoDiagnostics" label="Clear diagnostic records" button="Clear"></options-button>
         </section>
       </div>
     </section>

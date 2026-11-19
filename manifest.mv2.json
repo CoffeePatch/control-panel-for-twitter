@@ -13,7 +13,7 @@
     "96": "icons/icon96.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["alarms", "storage", "https://pro.soitis.dev/*"],
+  "permissions": ["alarms", "storage", "downloads", "https://pro.soitis.dev/*"],
   "background": {
     "scripts": ["background.js"],
     "persistent": false,
@@ -40,7 +40,8 @@
   "web_accessible_resources": ["shared/extensions-pro-bridge.js", "shared/settings.js"],
   "options_ui": {
     "browser_style": true,
-    "page": "options.html"
+    "page": "options.html",
+    "open_in_tab": true
   },
   "browser_action": {
     "browser_style": true,

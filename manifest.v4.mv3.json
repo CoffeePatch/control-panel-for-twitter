@@ -13,7 +13,7 @@
     "96": "icons/icon96.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage"],
+  "permissions": ["storage", "downloads"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -38,7 +38,8 @@
     }
   ],
   "options_ui": {
-    "page": "options.html"
+    "page": "options.html",
+    "open_in_tab": true
   },
   "action": {
     "default_title": "__MSG_extensionName__",

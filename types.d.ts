@@ -159,9 +159,11 @@ export type UserSettings = {
   showPremiumReplyGovernment: boolean
   sortReplies: 'relevant' | 'recent' | 'liked'
   themeFollowButtons: boolean
+  tweetTranslation: 'off' | 'manual' | 'auto'
   tweakQuoteTweetsPage: boolean
   unblurSensitiveContent: boolean
   uninvertFollowButtons: boolean
+  videoLayoutDiagnostics: boolean
   // Desktop only
   addUserHoverCardAccountLocation: boolean
   fullWidthContent: boolean
@@ -231,9 +233,14 @@ export type LocaleKey =
   | 'SHARED_TWEETS'
   | 'SHOW'
   | 'SHOW_MORE_REPLIES'
+  | 'SHOW_ORIGINAL'
+  | 'SHOW_TRANSLATION'
   | 'SHOW_TWEETS'
   | 'SORT_BY'
   | 'SORT_REPLIES'
+  | 'TRANSLATE_POST'
+  | 'TRANSLATING'
+  | 'TRANSLATION_FAILED'
   | 'TURN_OFF_QUOTE_TWEETS'
   | 'TURN_OFF_RETWEETS'
   | 'TURN_ON_RETWEETS'

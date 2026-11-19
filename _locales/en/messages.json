@@ -674,5 +674,35 @@
   },
   "xFixesOptions": {
     "message": "X fixes"
+  },
+  "option_off": {
+    "message": "Off"
+  },
+  "option_manual": {
+    "message": "Manual"
+  },
+  "option_auto": {
+    "message": "Auto"
+  },
+  "tweetTranslation": {
+    "message": "Tweet translation"
+  },
+  "tweetTranslationInfo": {
+    "message": "Translate tweets to English using X's native Grok translation service"
+  },
+  "videoDiagnosticsOptions": {
+    "message": "Video Layout Diagnostics"
+  },
+  "videoLayoutDiagnostics": {
+    "message": "Enable video layout diagnostics"
+  },
+  "videoLayoutDiagnosticsInfo": {
+    "message": "Capture geometry and timing diagnostics for video posts when sizing anomalies occur. No personal data or tweet text is captured."
+  },
+  "exportVideoDiagnostics": {
+    "message": "Export diagnostic report"
+  },
+  "clearVideoDiagnostics": {
+    "message": "Clear diagnostic records"
   }
 }

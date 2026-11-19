@@ -102,9 +102,11 @@ const DEFAULT_SETTINGS = {
   showPremiumReplyGovernment: true,
   sortReplies: 'relevant',
   themeFollowButtons: true,
+  tweetTranslation: 'manual',
   tweakQuoteTweetsPage: true,
   unblurSensitiveContent: false,
   uninvertFollowButtons: true,
+  videoLayoutDiagnostics: false,
   // Desktop only
   addUserHoverCardAccountLocation: true,
   fullWidthContent: false,
@@ -764,9 +766,14 @@ const locales = {
     SHARED_TWEETS: 'Shared Tweets',
     SHOW: 'Show',
     SHOW_MORE_REPLIES: 'Show more replies',
+    SHOW_ORIGINAL: 'Show original',
+    SHOW_TRANSLATION: 'Show translation',
     SHOW_TWEETS: '{count, plural, one {Show # Tweet} other {Show # Tweets}}',
     SORT_BY: 'Sort by',
     SORT_REPLIES: 'Sort replies',
+    TRANSLATE_POST: 'Translate post',
+    TRANSLATING: 'Translating...',
+    TRANSLATION_FAILED: 'Translation failed',
     TURN_OFF_QUOTE_TWEETS: 'Turn off Quote Tweets',
     TURN_OFF_RETWEETS: 'Turn off Retweets',
     TURN_ON_RETWEETS: 'Turn on Retweets',
@@ -3254,6 +3261,7 @@ const Svgs = {
   X_HOME_ACTIVE_PATH: 'M10.059 2.593c1.175-.784 2.707-.784 3.882 0l6.5 4.333C21.415 7.575 22 8.668 22 9.838V18.5c0 1.933-1.567 3.5-3.5 3.5h-4.25v-5.25c0-1.243-1.007-2.25-2.25-2.25s-2.25 1.007-2.25 2.25V22H5.5C3.567 22 2 20.433 2 18.5V9.838c0-1.17.585-2.263 1.559-2.912l6.5-4.333z',
   X_HOME_INACTIVE_PATH: 'M20 9.838c0-.502-.25-.97-.668-1.248l-6.5-4.333c-.504-.336-1.16-.336-1.664 0l-6.5 4.333C4.251 8.868 4 9.336 4 9.838V18.5c0 .828.672 1.5 1.5 1.5h3v-3.5c0-1.933 1.567-3.5 3.5-3.5s3.5 1.567 3.5 3.5V20h3c.828 0 1.5-.672 1.5-1.5V9.838zm2 8.662c0 1.933-1.567 3.5-3.5 3.5h-5v-5.5c0-.829-.672-1.5-1.5-1.5s-1.5.671-1.5 1.5V22h-5C3.567 22 2 20.433 2 18.5V9.838c0-1.17.585-2.263 1.559-2.912l6.5-4.333c1.175-.784 2.707-.784 3.882 0l6.5 4.333C21.415 7.575 22 8.668 22 9.838V18.5z',
   PLUS_PATH: 'M10.938 4.5H9.9c-1.136 0-1.929 0-2.546.05-.605.05-.953.143-1.216.277-.564.288-1.023.747-1.31 1.31-.135.264-.228.612-.277 1.218C4.5 7.97 4.5 8.765 4.5 9.9v4.2c0 1.136 0 1.929.05 2.546.05.605.143.953.277 1.216.288.565.747 1.023 1.31 1.31.264.135.612.228 1.217.277.617.05 1.41.051 2.546.051h4.2c1.136 0 1.929 0 2.545-.05.606-.05.954-.143 1.217-.277.565-.288 1.023-.746 1.31-1.31.135-.264.228-.612.277-1.217.05-.617.051-1.41.051-2.546v-1.037h2V14.1c0 1.103.001 1.992-.058 2.709-.06.728-.185 1.368-.487 1.96-.48.941-1.245 1.707-2.185 2.186-.593.302-1.233.428-1.961.488-.718.058-1.606.057-2.71.057H9.9c-1.103 0-1.991.001-2.709-.058-.728-.06-1.368-.185-1.96-.487-.941-.48-1.707-1.245-2.186-2.185-.302-.593-.428-1.233-.487-1.961-.059-.718-.058-1.606-.058-2.71V9.9c0-1.103-.001-1.991.058-2.709.06-.728.185-1.368.487-1.96.48-.941 1.245-1.707 2.185-2.186.593-.302 1.233-.428 1.961-.487.718-.059 1.606-.058 2.71-.058h1.037v2z',
+  TRANSLATE_PATH: 'M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z',
 }
 
 //#region Themes
@@ -4447,6 +4455,1173 @@ function storeConfigChanges(changes) {
 }
 //#endregion
 
+//#region Shared Helpers
+/** Matches the start of any individual Tweet URL, capturing the user and id */
+const URL_TWEET_BASE_RE = /^\/([a-zA-Z\d_]{1,20})\/status\/(\d+)/
+
+function getNestedQuoteContainers($tweet) {
+  if (!$tweet) return []
+  let userNames = Array.from($tweet.querySelectorAll('[data-testid="User-Name"]'))
+  if (userNames.length <= 1) return []
+
+  let outerAuthor = userNames[0]
+  let quoteContainers = []
+
+  for (let i = 1; i < userNames.length; i++) {
+    let quoteAuthor = userNames[i]
+    let current = quoteAuthor.parentElement
+    let quoteCard = null
+    while (current && current !== $tweet) {
+      if (!current.contains(outerAuthor)) {
+        quoteCard = current
+        current = current.parentElement
+      } else {
+        break
+      }
+    }
+    if (quoteCard && !quoteContainers.includes(quoteCard)) {
+      quoteContainers.push(quoteCard)
+    }
+  }
+  return quoteContainers
+}
+
+function getTweetMetadata($tweet) {
+  if (!$tweet) return null
+  let $time = $tweet.querySelector('time')
+  let $timeLink = $time?.closest('a')
+  let href = $timeLink?.getAttribute('href') || ''
+  if (!href) {
+    let $statusLink =
+      $tweet.querySelector?.('a[href*="/status/"]') ||
+      ($tweet.matches?.('a[href*="/status/"]') ? $tweet : null)
+    href = $statusLink?.getAttribute('href') || ''
+  }
+  let match = href.match(/\/([a-zA-Z\d_]{1,20})\/status\/(\d+)/)
+
+  let username = match?.[1]
+  let tweetId = match?.[2]
+
+  if (!tweetId && location.pathname.match(URL_TWEET_BASE_RE)) {
+    let focusedMatch = location.pathname.match(URL_TWEET_BASE_RE)
+    username ||= focusedMatch?.[1]
+    tweetId ||= focusedMatch?.[2]
+  }
+
+  let $userNameContainer = $tweet.querySelector('[data-testid="User-Name"]')
+  let author = ''
+  let handle = ''
+  if ($userNameContainer) {
+    let $authorLink = $userNameContainer.querySelector('a')
+    if ($authorLink) {
+      author = $authorLink.textContent?.trim() || ''
+      let fullText = $userNameContainer.textContent || ''
+      let handleMatch = fullText.match(/@([a-zA-Z\d_]{1,20})/)
+      handle = handleMatch ? handleMatch[1] : username || ''
+    }
+  }
+
+  return {
+    username: username || handle,
+    tweetId: tweetId || '',
+    author,
+    handle: handle || username || '',
+  }
+}
+
+function createSvgIcon(pathData, className) {
+  let svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  if (className) svg.setAttribute('class', className)
+  let path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  if (pathData) path.setAttribute('d', pathData)
+  svg.appendChild(path)
+  return svg
+}
+
+function createLoadingSvg(className) {
+  let svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('aria-hidden', 'true')
+  if (className) svg.setAttribute('class', className)
+  let circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+  circle.setAttribute('cx', '12')
+  circle.setAttribute('cy', '12')
+  circle.setAttribute('r', '9')
+  circle.setAttribute('fill', 'none')
+  circle.setAttribute('stroke-width', '3')
+  svg.appendChild(circle)
+  return svg
+}
+//#endregion
+
+//#region Tweet Translation
+const MAX_TRANSLATION_CACHE = 200
+const MAX_CONCURRENT_AUTO = 3
+const NON_ENGLISH_SCRIPT_REGEX =
+  /[\u0600-\u06FF\u0750-\u077F\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0A80-\u0AFF\u0B00-\u0B7F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F\u0E00-\u0E7F\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF\u0400-\u04FF]/
+
+const translationCache = new Map()
+const inflightTranslations = new Map()
+const tweetDisplayState = new Map()
+const autoQueue = []
+let activeAutoRequests = 0
+let rateLimitCooldownUntil = 0
+let translationIntersectionObserver = null
+
+function getCsrfToken() {
+  const match = document.cookie.match(/(?:^|;\s*)ct0=([^;]+)/)
+  return match ? match[1] : null
+}
+
+function getCachedTranslation(tweetId, lang = 'en') {
+  const key = `${tweetId}:${lang}`
+  if (!translationCache.has(key)) return null
+  const value = translationCache.get(key)
+  translationCache.delete(key)
+  translationCache.set(key, value)
+  return value
+}
+
+function setCachedTranslation(tweetId, lang = 'en', text) {
+  const key = `${tweetId}:${lang}`
+  if (translationCache.has(key)) {
+    translationCache.delete(key)
+  } else if (translationCache.size >= MAX_TRANSLATION_CACHE) {
+    const oldestKey = translationCache.keys().next().value
+    if (oldestKey) translationCache.delete(oldestKey)
+  }
+  translationCache.set(key, text)
+}
+
+function isConfidentlyNonEnglish($tweetText) {
+  if (!$tweetText) return false
+  const lang = ($tweetText.getAttribute('lang') || '').toLowerCase().trim()
+  if (lang && !lang.startsWith('en') && lang !== 'und' && lang !== 'zxx') {
+    return true
+  }
+  const text = $tweetText.textContent || ''
+  return NON_ENGLISH_SCRIPT_REGEX.test(text)
+}
+
+async function fetchTweetTranslation(tweetId, dstLang = 'en', onChunk = null) {
+  const cacheKey = `${tweetId}:${dstLang}`
+  if (translationCache.has(cacheKey)) {
+    return translationCache.get(cacheKey)
+  }
+  if (inflightTranslations.has(cacheKey)) {
+    return inflightTranslations.get(cacheKey)
+  }
+
+  const promise = (async () => {
+    try {
+      if (Date.now() < rateLimitCooldownUntil) {
+        throw new Error('RATE_LIMITED')
+      }
+      const csrfToken = getCsrfToken()
+      if (!csrfToken) {
+        throw new Error('NO_CSRF_TOKEN')
+      }
+
+      const res = await fetch('/i/api/2/grok/translation.json', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'content-type': 'application/json',
+          authorization:
+            'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+          'x-csrf-token': csrfToken,
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes',
+          'x-twitter-client-language': dstLang,
+        },
+        body: JSON.stringify({
+          content_type: 'POST',
+          id: tweetId,
+          dst_lang: dstLang,
+        }),
+      })
+
+      if (res.status === 429) {
+        rateLimitCooldownUntil = Date.now() + 60000
+        throw new Error('RATE_LIMITED')
+      }
+      if (!res.ok) {
+        throw new Error(`HTTP_${res.status}`)
+      }
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let fullText = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop()
+        for (let line of lines) {
+          line = line.trim()
+          if (!line) continue
+          try {
+            const data = JSON.parse(line)
+            if (data?.result?.text) {
+              fullText += data.result.text
+              if (onChunk) onChunk(fullText)
+            }
+          } catch (_) {}
+        }
+      }
+      buffer += decoder.decode()
+      if (buffer && buffer.trim()) {
+        const lines = buffer.split('\n')
+        for (let line of lines) {
+          line = line.trim()
+          if (!line) continue
+          try {
+            const data = JSON.parse(line)
+            if (data?.result?.text) {
+              fullText += data.result.text
+              if (onChunk) onChunk(fullText)
+            }
+          } catch (_) {}
+        }
+      }
+
+      if (!fullText) {
+        throw new Error('EMPTY_TRANSLATION')
+      }
+
+      setCachedTranslation(tweetId, dstLang, fullText)
+      return fullText
+    } finally {
+      inflightTranslations.delete(cacheKey)
+    }
+  })()
+
+  inflightTranslations.set(cacheKey, promise)
+  return promise
+}
+
+function queueAutoTranslation(task) {
+  autoQueue.push(task)
+  processAutoQueue()
+}
+
+async function processAutoQueue() {
+  if (activeAutoRequests >= MAX_CONCURRENT_AUTO || autoQueue.length === 0) return
+  if (settings.tweetTranslation !== 'auto') {
+    autoQueue.length = 0
+    return
+  }
+  if (Date.now() < rateLimitCooldownUntil) {
+    setTimeout(processAutoQueue, Math.max(1000, rateLimitCooldownUntil - Date.now()))
+    return
+  }
+
+  const nextTask = autoQueue.shift()
+  if (!nextTask) return
+
+  activeAutoRequests++
+  try {
+    await nextTask()
+  } catch (_) {
+    // Handled in caller
+  } finally {
+    activeAutoRequests--
+    processAutoQueue()
+  }
+}
+
+const TWEET_TEXT_SELECTOR =
+  '[data-testid="tweetText"], div.text-primary.whitespace-pre-wrap, div.whitespace-pre-wrap.wrap-anywhere'
+
+function getTranslationObserver() {
+  if (!translationIntersectionObserver) {
+    translationIntersectionObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const $btn = entry.target
+            translationIntersectionObserver?.unobserve($btn)
+            const tweetId = $btn.getAttribute('data-cpft-tweet-id')
+            if (tweetId && $btn.isConnected) {
+              queueAutoTranslation(async () => {
+                if (
+                  settings.tweetTranslation === 'auto' &&
+                  $btn.isConnected &&
+                  $btn.getAttribute('data-cpft-tweet-id') === tweetId
+                ) {
+                  const $tweet = $btn.closest('[data-testid="tweet"]') || $btn.closest('article')
+                  if ($tweet) {
+                    const quoteContainers = getNestedQuoteContainers($tweet)
+                    const $tweetTexts = Array.from(
+                      $tweet.querySelectorAll(TWEET_TEXT_SELECTOR),
+                    ).filter(($el) => !quoteContainers.some(($qc) => $qc.contains($el)))
+                    if ($tweetTexts.length > 0) {
+                      await executeHeaderTranslation($tweet, $btn, $tweetTexts[0], tweetId)
+                    }
+                  }
+                }
+              })
+            }
+          }
+        }
+      },
+      {
+        rootMargin: '250px 0px',
+        threshold: 0.01,
+      },
+    )
+  }
+  return translationIntersectionObserver
+}
+
+function teardownAutoTranslation() {
+  if (translationIntersectionObserver) {
+    translationIntersectionObserver.disconnect()
+    translationIntersectionObserver = null
+  }
+  autoQueue.length = 0
+}
+
+function renderStreamingChunkInPlace($primaryText, tweetId, chunkText) {
+  if ($primaryText) {
+    $primaryText.style.display = 'none'
+  }
+  const $parent = $primaryText?.parentNode
+  if (!$parent) return
+
+  let $translatedText = $parent.querySelector(
+    `:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`,
+  )
+  if (!$translatedText) {
+    $translatedText = document.createElement('div')
+    $translatedText.className = `cpft-translated-text ${$primaryText.className || ''}`
+    $translatedText.setAttribute('dir', 'auto')
+    $translatedText.setAttribute('data-cpft-translation-for', tweetId)
+    const compColor = window.getComputedStyle($primaryText).color
+    if (compColor) $translatedText.style.color = compColor
+    $parent.insertBefore($translatedText, $primaryText.nextSibling)
+  }
+  $translatedText.textContent = chunkText
+  $translatedText.style.display = ''
+}
+
+function setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, text, displayState) {
+  const $parent = $primaryText?.parentNode
+  if (!$parent) return
+
+  let $translatedText = $parent.querySelector(
+    `:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`,
+  )
+  if (!$translatedText && text) {
+    $translatedText = document.createElement('div')
+    $translatedText.className = `cpft-translated-text ${$primaryText.className || ''}`
+    $translatedText.setAttribute('dir', 'auto')
+    $translatedText.setAttribute('data-cpft-translation-for', tweetId)
+    const compColor = window.getComputedStyle($primaryText).color
+    if (compColor) $translatedText.style.color = compColor
+    $parent.insertBefore($translatedText, $primaryText.nextSibling)
+  }
+
+  if ($translatedText && text) {
+    $translatedText.textContent = text
+  }
+
+  $btn.classList.remove('cpft-translate-loading')
+  $btn.replaceChildren(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+
+  if (displayState === 'translated') {
+    if ($primaryText) $primaryText.style.display = 'none'
+    if ($translatedText) $translatedText.style.display = ''
+    $btn.className = 'cpft-translate-header-btn cpft-translate-state-translated'
+    $btn.setAttribute('title', getString('SHOW_ORIGINAL'))
+    $btn.setAttribute('aria-label', getString('SHOW_ORIGINAL'))
+    tweetDisplayState.set(tweetId, 'translated')
+  } else {
+    if ($primaryText) $primaryText.style.display = ''
+    if ($translatedText) $translatedText.style.display = 'none'
+    $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+    $btn.setAttribute('title', text ? getString('SHOW_TRANSLATION') : getString('TRANSLATE_POST'))
+    $btn.setAttribute('aria-label', text ? getString('SHOW_TRANSLATION') : getString('TRANSLATE_POST'))
+    tweetDisplayState.set(tweetId, 'original')
+  }
+}
+
+async function executeHeaderTranslation($tweet, $btn, $primaryText, tweetId) {
+  if (!$btn || !tweetId) return
+
+  $btn.classList.remove('cpft-translate-state-original', 'cpft-translate-state-translated')
+  $btn.classList.add('cpft-translate-loading')
+  $btn.setAttribute('title', getString('TRANSLATING'))
+  $btn.setAttribute('aria-label', getString('TRANSLATING'))
+  $btn.replaceChildren(createLoadingSvg('cpft-translate-spinner'))
+
+  try {
+    const result = await fetchTweetTranslation(tweetId, 'en', (chunkText) => {
+      if ($btn.isConnected) {
+        renderStreamingChunkInPlace($primaryText, tweetId, chunkText)
+      }
+    })
+    if ($btn.isConnected) {
+      setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, result, 'translated')
+    }
+  } catch (err) {
+    if ($btn.isConnected) {
+      const isRateLimit = /** @type {any} */ (err)?.message === 'RATE_LIMITED'
+      $btn.classList.remove('cpft-translate-loading')
+      $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+      $btn.replaceChildren(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+      $btn.setAttribute('title', isRateLimit ? 'Rate limit reached' : getString('TRANSLATION_FAILED'))
+      if ($primaryText) $primaryText.style.display = ''
+      const $parent = $primaryText?.parentNode
+      const $translatedText = $parent?.querySelector(
+        `:scope > .cpft-translated-text[data-cpft-translation-for="${tweetId}"]`,
+      )
+      if ($translatedText) $translatedText.style.display = 'none'
+    }
+  }
+}
+
+function processTweetTranslation($tweet) {
+  if (!enabled || settings.tweetTranslation === 'off') return
+  if (!$tweet) return
+
+  const quoteContainers = getNestedQuoteContainers($tweet)
+  const $tweetTexts = Array.from($tweet.querySelectorAll(TWEET_TEXT_SELECTOR)).filter(
+    ($el) => !quoteContainers.some(($qc) => $qc.contains($el)),
+  )
+  if ($tweetTexts.length === 0) return
+
+  const $primaryText = $tweetTexts[0]
+  const metadata = getTweetMetadata($tweet)
+  const tweetId = metadata?.tweetId
+  if (!tweetId) return
+
+  let $moreBtn = $tweet.querySelector('[data-testid="caret"]')
+  if (!$moreBtn) {
+    $moreBtn = $tweet.querySelector('button[aria-haspopup="menu"]')
+  }
+  if (!$moreBtn) {
+    const permalinkBar = $tweet.querySelector('[class*="r-1d09ksm"]') || $tweet.querySelector('div[role="group"]')
+    if (permalinkBar && permalinkBar.parentElement) {
+      const headerBtns = permalinkBar.parentElement.querySelectorAll('button')
+      if (headerBtns.length > 0) {
+        $moreBtn = headerBtns[headerBtns.length - 1]
+      }
+    }
+  }
+
+  if (!$moreBtn || !$moreBtn.parentNode) {
+    if (!/** @type {any} */ ($tweet)._cpftTranslationWaiting) {
+      /** @type {any} */ ($tweet)._cpftTranslationWaiting = true
+      const observer = new MutationObserver(() => {
+        if ($tweet.querySelector('[data-testid="caret"], button[aria-haspopup="menu"]')) {
+          observer.disconnect()
+          delete /** @type {any} */ ($tweet)._cpftTranslationWaiting
+          processTweetTranslation($tweet)
+        }
+      })
+      observer.observe($tweet, { childList: true, subtree: true })
+      setTimeout(() => {
+        observer.disconnect()
+        delete /** @type {any} */ ($tweet)._cpftTranslationWaiting
+      }, 2000)
+    }
+    return
+  }
+
+  const $existingBtn = $moreBtn.parentNode.querySelector(':scope > .cpft-translate-header-btn')
+  if ($existingBtn) {
+    if ($existingBtn.getAttribute('data-cpft-translation-for') === tweetId && $existingBtn.querySelector('svg')) {
+      const cached = getCachedTranslation(tweetId, 'en')
+      if (cached) {
+        const state = tweetDisplayState.get(tweetId) || 'translated'
+        setTweetTranslationDisplay($tweet, $existingBtn, $primaryText, tweetId, cached, state)
+      }
+      return
+    }
+    $existingBtn.remove()
+  }
+
+  const $btn = document.createElement('button')
+  $btn.type = 'button'
+  $btn.className = 'cpft-translate-header-btn cpft-translate-state-original'
+  $btn.setAttribute('role', 'button')
+  $btn.setAttribute('data-cpft-translation-for', tweetId)
+  $btn.setAttribute('data-cpft-tweet-id', tweetId)
+  $btn.setAttribute('aria-label', getString('TRANSLATE_POST'))
+  $btn.setAttribute('title', getString('TRANSLATE_POST'))
+  $btn.appendChild(createSvgIcon(Svgs.TRANSLATE_PATH, 'cpft-translate-icon'))
+
+  $btn.addEventListener('click', async (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const cached = getCachedTranslation(tweetId, 'en')
+    if (cached) {
+      const currentState = tweetDisplayState.get(tweetId) || 'translated'
+      const nextState = currentState === 'translated' ? 'original' : 'translated'
+      setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, cached, nextState)
+      return
+    }
+
+    await executeHeaderTranslation($tweet, $btn, $primaryText, tweetId)
+  })
+
+  $moreBtn.parentNode.insertBefore($btn, $moreBtn)
+
+  const cached = getCachedTranslation(tweetId, 'en')
+  if (cached) {
+    const state = tweetDisplayState.get(tweetId) || 'translated'
+    setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, cached, state)
+    return
+  }
+
+  if (settings.tweetTranslation === 'auto' && isConfidentlyNonEnglish($primaryText)) {
+    $btn.classList.add('cpft-translate-loading')
+    $btn.setAttribute('title', getString('TRANSLATING'))
+    $btn.setAttribute('aria-label', getString('TRANSLATING'))
+    $btn.replaceChildren(createLoadingSvg('cpft-translate-spinner'))
+    getTranslationObserver().observe($btn)
+    return
+  }
+
+  setTweetTranslationDisplay($tweet, $btn, $primaryText, tweetId, null, 'original')
+}
+//#endregion
+
+//#region Single Video Sizing
+const SINGLE_VIDEO_STYLE_PROPS = [
+  '--cpft-video-ar',
+  'max-width',
+  'width',
+  'margin-left',
+  'margin-right',
+  'align-self',
+]
+
+function parseCssAspectRatio(arStr) {
+  if (!arStr) return 0
+  let parts = arStr.split('/').map((s) => parseFloat(s.trim()))
+  if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+    return parts[0] / parts[1]
+  }
+  if (parts.length === 1 && parts[0] > 0) {
+    return parts[0]
+  }
+  return 0
+}
+
+function cleanupSingleVideoElement(el) {
+  if (!el) return
+
+  if (/** @type {any} */ (el)._cpftSingleVideoOrigStyles) {
+    for (let prop of SINGLE_VIDEO_STYLE_PROPS) {
+      let orig = /** @type {any} */ (el)._cpftSingleVideoOrigStyles[prop]
+      if (orig && orig.value) {
+        el.style.setProperty(prop, orig.value, orig.priority)
+      } else {
+        el.style.removeProperty(prop)
+      }
+    }
+    delete /** @type {any} */ (el)._cpftSingleVideoOrigStyles
+  } else if (el.classList?.contains('cpft-single-video-card') || el.dataset?.cpftSingleVideoOwner) {
+    for (let prop of SINGLE_VIDEO_STYLE_PROPS) {
+      el.style.removeProperty(prop)
+    }
+  }
+
+  el.classList?.remove('cpft-single-video-card')
+  delete el.dataset?.cpftSingleVideoOwner
+}
+
+function teardownSingleVideoSizing(root) {
+  if (!root) return
+
+  let targets = root.querySelectorAll?.('.cpft-single-video-card, [data-cpft-single-video-owner]') || []
+  for (let el of targets) {
+    cleanupSingleVideoElement(/** @type {HTMLElement} */ (el))
+  }
+  if (root.classList?.contains('cpft-single-video-card') || root.dataset?.cpftSingleVideoOwner) {
+    cleanupSingleVideoElement(root)
+  }
+
+  let videoPlayers = root.querySelectorAll?.('[data-cpft-single-video-processed]') || []
+  for (let vp of videoPlayers) {
+    delete (/** @type {HTMLElement} */ (vp)).dataset.cpftSingleVideoProcessed
+  }
+  if (root.dataset?.cpftSingleVideoProcessed) {
+    delete root.dataset.cpftSingleVideoProcessed
+  }
+
+  if (/** @type {any} */ (root)._cpftVideoObserver) {
+    /** @type {any} */ (root)._cpftVideoObserver.disconnect()
+    delete /** @type {any} */ (root)._cpftVideoObserver
+  }
+  delete root.dataset?.cpftVideoObserved
+
+  if (settings.videoLayoutDiagnostics) {
+    let metadata = getTweetMetadata(root)
+    let tweetId = metadata?.tweetId
+    if (tweetId && diagnosticTrackedVideos.has(tweetId)) {
+      recordVideoDiagnosticEvent(tweetId, 'sizing_teardown')
+    }
+  }
+}
+
+function processSingleVideoSection(sectionRoot, excludeContainers = []) {
+  if (!sectionRoot || !sectionRoot.isConnected) return
+
+  let videoCandidates = Array.from(
+    sectionRoot.querySelectorAll('[data-testid="videoPlayer"], [data-testid="videoComponent"], video'),
+  ).filter(
+    (v) => !excludeContainers.some((c) => c.contains(v)) && !v.closest('.cpft-carousel-container, .cpft-fullview-container'),
+  )
+
+  if (videoCandidates.length === 0) {
+    teardownSingleVideoSizing(sectionRoot)
+    return
+  }
+
+  let videos = []
+  for (let v of videoCandidates) {
+    let normalized =
+      v.closest('[data-testid="videoPlayer"]') || v.closest('[data-testid="videoComponent"]') || v
+    if (videos.some((existing) => existing.contains(normalized) || normalized.contains(existing))) continue
+    videos.push(normalized)
+  }
+
+  if (videos.length !== 1) {
+    teardownSingleVideoSizing(sectionRoot)
+    return
+  }
+
+  let photoLinks = Array.from(sectionRoot.querySelectorAll('a[href*="/photo/"]')).filter(
+    (a) => !excludeContainers.some((c) => c.contains(a)),
+  )
+  if (photoLinks.length > 1) {
+    teardownSingleVideoSizing(sectionRoot)
+    return
+  }
+
+  let $videoPlayer = /** @type {HTMLElement} */ (videos[0])
+  let $video = /** @type {HTMLVideoElement | null} */ ($videoPlayer.querySelector('video') || sectionRoot.querySelector('video'))
+
+  let arValue = 0
+  if ($video && $video.videoWidth > 0 && $video.videoHeight > 0) {
+    arValue = $video.videoWidth / $video.videoHeight
+  }
+  if (!arValue && $videoPlayer.dataset.cpftVideoAr) {
+    arValue = parseFloat($videoPlayer.dataset.cpftVideoAr)
+  }
+  if (!arValue) {
+    let elWithAr = $videoPlayer.closest('[style*="aspect-ratio"]') || $videoPlayer.querySelector('[style*="aspect-ratio"]')
+    if (elWithAr) {
+      let arMatch = elWithAr.getAttribute('style')?.match(/aspect-ratio:\s*([0-9./]+)/)
+      if (arMatch) arValue = parseCssAspectRatio(arMatch[1])
+    }
+  }
+
+  if (arValue <= 0 || arValue >= 0.95) {
+    teardownSingleVideoSizing(sectionRoot)
+    return
+  }
+
+  let $tweetPhoto = $videoPlayer.closest('[data-testid="tweetPhoto"]')
+  let $card = /** @type {HTMLElement | null} */ (
+    $videoPlayer.closest('.r-1867qdf') ||
+    $videoPlayer.closest('[style*="aspect-ratio"]') ||
+    $tweetPhoto?.parentElement?.parentElement ||
+    $tweetPhoto?.parentElement ||
+    $videoPlayer.parentElement
+  )
+
+  if (!$card) return
+
+  if ($videoPlayer.dataset.cpftSingleVideoProcessed === String(arValue) && $card.classList?.contains('cpft-single-video-card')) {
+    return
+  }
+  $videoPlayer.dataset.cpftSingleVideoProcessed = String(arValue)
+
+  let targets = [$card]
+  let maxWidthFormula = `min(calc(min(70vh, 650px) * ${arValue}), 100%)`
+
+  for (let el of targets) {
+    if (!/** @type {any} */ (el)._cpftSingleVideoOrigStyles) {
+      /** @type {any} */ (el)._cpftSingleVideoOrigStyles = {}
+      for (let prop of SINGLE_VIDEO_STYLE_PROPS) {
+        /** @type {any} */ (el)._cpftSingleVideoOrigStyles[prop] = {
+          value: el.style.getPropertyValue(prop),
+          priority: el.style.getPropertyPriority(prop),
+        }
+      }
+    }
+    el.dataset.cpftSingleVideoOwner = 'true'
+    el.classList.add('cpft-single-video-card')
+    el.style.setProperty('--cpft-video-ar', String(arValue))
+    el.style.setProperty('max-width', maxWidthFormula, 'important')
+    el.style.setProperty('margin-left', '0', 'important')
+    el.style.setProperty('margin-right', '0', 'important')
+    el.style.setProperty('align-self', 'flex-start', 'important')
+  }
+
+  if (settings.videoLayoutDiagnostics) {
+    let metadata = getTweetMetadata(sectionRoot)
+    let tweetId = metadata?.tweetId
+    if (tweetId) {
+      let diag = diagnosticTrackedVideos.get(tweetId)
+      if (diag) {
+        diag.arDetermined = arValue
+        recordVideoDiagnosticEvent(tweetId, 'sizing_applied')
+      }
+    }
+  }
+}
+
+function observeSingleVideoInTweet($tweet) {
+  if (!$tweet || !$tweet.isConnected || $tweet.dataset.cpftVideoObserved) return
+  $tweet.dataset.cpftVideoObserved = 'true'
+
+  let observer = new MutationObserver((mutations) => {
+    let shouldProcess = false
+    for (let m of mutations) {
+      if (m.addedNodes.length > 0) {
+        for (let n of m.addedNodes) {
+          if (
+            n.nodeType === 1 &&
+            (/** @type {HTMLElement} */ (n).matches?.('[data-testid="videoPlayer"], [data-testid="videoComponent"], video') ||
+              /** @type {HTMLElement} */ (n).querySelector?.('[data-testid="videoPlayer"], [data-testid="videoComponent"], video'))
+          ) {
+            shouldProcess = true
+            break
+          }
+        }
+      }
+      if (shouldProcess) break
+    }
+    if (shouldProcess) {
+      processSingleVideoMedia($tweet)
+    }
+  })
+
+  observer.observe($tweet, { childList: true, subtree: true })
+  let tweetAny = /** @type {any} */ ($tweet)
+  tweetAny._cpftVideoObserver = observer
+}
+
+function processSingleVideoMedia($tweet) {
+  if (!$tweet || !$tweet.isConnected) return
+
+  let quoteContainers = getNestedQuoteContainers($tweet)
+
+  for (let quoteContainer of quoteContainers) {
+    processSingleVideoSection(quoteContainer, [])
+  }
+
+  processSingleVideoSection($tweet, quoteContainers)
+  observeSingleVideoInTweet($tweet)
+
+  if (settings.videoLayoutDiagnostics) {
+    trackVideoDiagnosticsForTweet($tweet)
+  }
+}
+//#endregion
+
+//#region Video Layout Diagnostics
+const MAX_DIAGNOSTIC_TRACKED_VIDEOS = 20
+const MAX_DIAGNOSTIC_EVENTS_PER_VIDEO = 25
+let sharedVideoDiagResizeObserver = null
+let videoDiagWindowResizeListening = false
+let lastWindowResizeTimestamp = 0
+
+/** @type {Map<string, any>} */
+const diagnosticTrackedVideos = new Map()
+
+function onDiagWindowResize() {
+  lastWindowResizeTimestamp = Date.now()
+}
+
+function ensureDiagWindowResizeListener() {
+  if (!videoDiagWindowResizeListening) {
+    window.addEventListener('resize', onDiagWindowResize, { passive: true })
+    videoDiagWindowResizeListening = true
+  }
+}
+
+function getSharedVideoDiagResizeObserver() {
+  if (!sharedVideoDiagResizeObserver) {
+    sharedVideoDiagResizeObserver = new ResizeObserver((entries) => {
+      if (!settings.videoLayoutDiagnostics) return
+      for (let entry of entries) {
+        let el = /** @type {HTMLElement & {_cpftVideoDiagTweetId?: string}} */ (entry.target)
+        let tweetId = el._cpftVideoDiagTweetId
+        if (!tweetId) continue
+        let tracked = diagnosticTrackedVideos.get(tweetId)
+        if (!tracked || !tracked.$tweet?.isConnected) continue
+
+        let rect = entry.contentRect
+        let width = Math.round(rect.width)
+        let height = Math.round(rect.height)
+
+        if (
+          Math.abs(width - tracked.lastCardWidth) < 2 &&
+          Math.abs(height - tracked.lastCardHeight) < 2
+        ) {
+          continue
+        }
+
+        let isSuddenJump =
+          tracked.lastCardWidth > 0 &&
+          (Math.abs(width - tracked.lastCardWidth) > 150 ||
+            Math.abs(height - tracked.lastCardHeight) > 150) &&
+          Date.now() - lastWindowResizeTimestamp > 500
+
+        let prevWidth = tracked.lastCardWidth
+        let prevHeight = tracked.lastCardHeight
+        tracked.lastCardWidth = width
+        tracked.lastCardHeight = height
+
+        let anomaly = isSuddenJump
+          ? {
+              type: 'SUDDEN_SIZE_JUMP',
+              details: {
+                prevWidth,
+                prevHeight,
+                newWidth: width,
+                newHeight: height,
+                widthDelta: width - prevWidth,
+                heightDelta: height - prevHeight,
+              },
+            }
+          : null
+
+        recordVideoDiagnosticEvent(tweetId, 'resize', anomaly)
+      }
+    })
+  }
+  return sharedVideoDiagResizeObserver
+}
+
+function captureVideoLayoutSnapshot(tracked, eventType, anomalyInfo = null) {
+  let { tweetId, $tweet, $card, $video, arDetermined } = tracked
+  let videoEl = $video || $tweet?.querySelector('video')
+
+  let $primaryColumn = document.querySelector('div[data-testid="primaryColumn"]')
+  let timelineWidth = $primaryColumn ? Math.round($primaryColumn.getBoundingClientRect().width) : null
+  let tweetWidth = $tweet ? Math.round($tweet.getBoundingClientRect().width) : null
+
+  let cardRect = $card ? $card.getBoundingClientRect() : null
+  let cardGeometry = $card
+    ? {
+        clientWidth: $card.clientWidth,
+        clientHeight: $card.clientHeight,
+        offsetWidth: $card.offsetWidth,
+        offsetHeight: $card.offsetHeight,
+        rect: cardRect
+          ? {
+              width: Math.round(cardRect.width),
+              height: Math.round(cardRect.height),
+              top: Math.round(cardRect.top),
+              left: Math.round(cardRect.left),
+            }
+          : null,
+      }
+    : null
+
+  let videoRect = videoEl ? videoEl.getBoundingClientRect() : null
+  let videoGeometry = videoEl
+    ? {
+        clientWidth: videoEl.clientWidth,
+        clientHeight: videoEl.clientHeight,
+        offsetWidth: videoEl.offsetWidth,
+        offsetHeight: videoEl.offsetHeight,
+        rect: videoRect
+          ? {
+              width: Math.round(videoRect.width),
+              height: Math.round(videoRect.height),
+            }
+          : null,
+      }
+    : null
+
+  let videoState = {
+    readyState: videoEl?.readyState ?? null,
+    videoWidth: videoEl?.videoWidth ?? 0,
+    videoHeight: videoEl?.videoHeight ?? 0,
+    aspectRatio:
+      videoEl && videoEl.videoHeight
+        ? Number((videoEl.videoWidth / videoEl.videoHeight).toFixed(4))
+        : null,
+    arDetermined: arDetermined ?? null,
+    paused: videoEl?.paused ?? null,
+    duration: videoEl?.duration ? Number(videoEl.duration.toFixed(2)) : null,
+  }
+
+  let cardStyle = $card ? window.getComputedStyle($card) : null
+  let videoStyle = videoEl ? window.getComputedStyle(videoEl) : null
+  let computedStyles = {
+    cardMaxWidth: cardStyle?.maxWidth || null,
+    cardMaxHeight: cardStyle?.maxHeight || null,
+    cardAspectRatio: cardStyle?.aspectRatio || null,
+    cardWidth: cardStyle?.width || null,
+    cardHeight: cardStyle?.height || null,
+    cardOverflow: cardStyle?.overflow || null,
+    cardAlignSelf: cardStyle?.alignSelf || null,
+    cardTransform: cardStyle?.transform || null,
+    videoObjectFit: videoStyle?.objectFit || null,
+  }
+
+  let cpftClasses = {
+    hasSingleVideoCardClass: Boolean($card?.classList?.contains('cpft-single-video-card')),
+    cardClassList: $card
+      ? Array.from($card.classList)
+          .filter((c) => c.startsWith('cpft-'))
+          .join(' ')
+      : '',
+    customArVariable: $card?.style?.getPropertyValue('--cpft-video-ar') || null,
+  }
+
+  let viewport = {
+    width: window.innerWidth,
+    height: window.innerHeight,
+    scrollY: Math.round(window.scrollY),
+  }
+
+  let configSummary = {
+    videoLayoutDiagnostics: settings.videoLayoutDiagnostics,
+    tweetTranslation: settings.tweetTranslation,
+  }
+
+  return {
+    timestamp: new Date().toISOString(),
+    timeOffsetMs: Math.round(performance.now()),
+    eventType,
+    tweetId,
+    videoState,
+    cardGeometry,
+    videoGeometry,
+    timelineGeometry: {
+      timelineWidth,
+      tweetWidth,
+    },
+    computedStyles,
+    cpftClasses,
+    viewport,
+    configSummary,
+    anomalyInfo: anomalyInfo || null,
+  }
+}
+
+function checkVideoLayoutAnomalies(tracked, snapshot) {
+  let detectedAnomalies = []
+  let cardWidth = snapshot.cardGeometry?.rect?.width || 0
+  let effectiveTimelineWidth =
+    snapshot.timelineGeometry?.tweetWidth || snapshot.timelineGeometry?.timelineWidth || 600
+
+  if (cardWidth > effectiveTimelineWidth + 5) {
+    detectedAnomalies.push({
+      type: 'OVERFLOW_TIMELINE_WIDTH',
+      details: {
+        cardWidth,
+        effectiveTimelineWidth,
+        overflowPx: Math.round(cardWidth - effectiveTimelineWidth),
+      },
+    })
+  }
+
+  return detectedAnomalies
+}
+
+function reportVideoAnomaly(tracked, anomalyType, anomalyDetails) {
+  if (tracked.reportedAnomalies.has(anomalyType)) return
+  tracked.reportedAnomalies.add(anomalyType)
+
+  let incident = {
+    incidentId: `${tracked.tweetId}-${anomalyType}-${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    anomalyType,
+    tweetId: tracked.tweetId,
+    configSummary: {
+      videoLayoutDiagnostics: settings.videoLayoutDiagnostics,
+      tweetTranslation: settings.tweetTranslation,
+    },
+    details: anomalyDetails,
+    recentEvents: [...tracked.events],
+  }
+
+  document.dispatchEvent(
+    new CustomEvent('cpftVideoDiagnosticIncident', {
+      detail: incident,
+    }),
+  )
+}
+
+function recordVideoDiagnosticEvent(tweetId, eventType, anomalyInfo = null) {
+  if (!settings.videoLayoutDiagnostics) return
+  let tracked = diagnosticTrackedVideos.get(tweetId)
+  if (!tracked) return
+
+  let snapshot = captureVideoLayoutSnapshot(tracked, eventType, anomalyInfo)
+
+  tracked.events.push(snapshot)
+  if (tracked.events.length > MAX_DIAGNOSTIC_EVENTS_PER_VIDEO) {
+    tracked.events.shift()
+  }
+
+  if (anomalyInfo) {
+    reportVideoAnomaly(tracked, anomalyInfo.type, anomalyInfo.details)
+  }
+
+  let anomalies = checkVideoLayoutAnomalies(tracked, snapshot)
+  for (let anomaly of anomalies) {
+    reportVideoAnomaly(tracked, anomaly.type, anomaly.details)
+  }
+}
+
+function trackVideoDiagnosticsForTweet($tweet) {
+  if (!settings.videoLayoutDiagnostics || !enabled) return
+  if (!$tweet || !$tweet.isConnected) return
+
+  let videoCandidates = Array.from(
+    $tweet.querySelectorAll('[data-testid="videoPlayer"], [data-testid="videoComponent"], video'),
+  ).filter((v) => !v.closest('.cpft-carousel-container, .cpft-fullview-container'))
+  if (videoCandidates.length === 0) return
+
+  let videos = []
+  for (let v of videoCandidates) {
+    let normalized =
+      v.closest('[data-testid="videoPlayer"]') || v.closest('[data-testid="videoComponent"]') || v
+    if (videos.some((existing) => existing.contains(normalized) || normalized.contains(existing))) continue
+    videos.push(normalized)
+  }
+  if (videos.length !== 1) return
+
+  let photoLinks = Array.from($tweet.querySelectorAll('a[href*="/photo/"]')).filter(
+    (a) => !a.closest('.cpft-carousel-container, .cpft-fullview-container'),
+  )
+  if (photoLinks.length > 1) return
+
+  let photoContainers = Array.from($tweet.querySelectorAll('[data-testid="tweetPhoto"]')).filter(
+    (p) => !p.closest('.cpft-carousel-container, .cpft-fullview-container'),
+  )
+  let separatePhotos = photoContainers.filter(
+    (p) =>
+      !p.querySelector('[data-testid="videoPlayer"], [data-testid="videoComponent"], video') &&
+      !p.closest('[data-testid="videoPlayer"], [data-testid="videoComponent"]'),
+  )
+  if (separatePhotos.length > 0) return
+
+  let $videoPlayer = /** @type {HTMLElement} */ (videos[0])
+  let $tweetPhoto = $videoPlayer.closest('[data-testid="tweetPhoto"]')
+  let $card = /** @type {HTMLElement | null} */ (
+    $videoPlayer.closest('.r-1867qdf') ||
+    $videoPlayer.closest('[style*="aspect-ratio"]') ||
+    $tweetPhoto?.parentElement?.parentElement ||
+    $tweetPhoto?.parentElement ||
+    $videoPlayer.parentElement
+  )
+  if (!$card) return
+
+  let $video = /** @type {HTMLVideoElement | null} */ ($videoPlayer.querySelector('video') || $tweet.querySelector('video'))
+
+  let metadata = getTweetMetadata($tweet)
+  let tweetId = metadata?.tweetId
+  if (!tweetId) {
+    let permalinkMatch = location.pathname.match(/\/status\/(\d+)/)
+    if (permalinkMatch) {
+      tweetId = permalinkMatch[1]
+    } else {
+      let statusLink = $tweet.querySelector('a[href*="/status/"]')
+      let m = statusLink?.getAttribute('href')?.match(/\/status\/(\d+)/)
+      if (m) tweetId = m[1]
+    }
+  }
+  if (!tweetId) return
+
+  ensureDiagWindowResizeListener()
+
+  let tracked = diagnosticTrackedVideos.get(tweetId)
+  if (tracked) {
+    tracked.$tweet = $tweet
+    tracked.$card = $card
+    if ($video) tracked.$video = $video
+    return
+  }
+
+  if (diagnosticTrackedVideos.size >= MAX_DIAGNOSTIC_TRACKED_VIDEOS) {
+    let oldestKey = diagnosticTrackedVideos.keys().next().value
+    if (oldestKey) {
+      let oldTracked = diagnosticTrackedVideos.get(oldestKey)
+      if (oldTracked?.$card && sharedVideoDiagResizeObserver) {
+        sharedVideoDiagResizeObserver.unobserve(oldTracked.$card)
+      }
+      diagnosticTrackedVideos.delete(oldestKey)
+    }
+  }
+
+  $card.dataset.cpftVideoDiagTweetId = tweetId
+  /** @type {any} */ ($card)._cpftVideoDiagTweetId = tweetId
+
+  let initialRect = $card.getBoundingClientRect()
+  tracked = {
+    tweetId,
+    $tweet,
+    $card,
+    $video,
+    arDetermined: null,
+    events: [],
+    lastCardWidth: Math.round(initialRect.width),
+    lastCardHeight: Math.round(initialRect.height),
+    reportedAnomalies: new Set(),
+    metadataObserved: false,
+  }
+  diagnosticTrackedVideos.set(tweetId, tracked)
+
+  let ro = getSharedVideoDiagResizeObserver()
+  ro.observe($card)
+
+  recordVideoDiagnosticEvent(tweetId, 'initial')
+
+  if ($video && $video.readyState < 1 && !tracked.metadataObserved) {
+    tracked.metadataObserved = true
+    $video.addEventListener(
+      'loadedmetadata',
+      () => {
+        recordVideoDiagnosticEvent(tweetId, 'metadata')
+        setTimeout(() => {
+          if (!settings.videoLayoutDiagnostics || !diagnosticTrackedVideos.has(tweetId)) return
+          recordVideoDiagnosticEvent(tweetId, 'delayed_metadata_check')
+        }, 300)
+      },
+      { once: true },
+    )
+  }
+}
+
+function teardownVideoDiagnostics() {
+  if (sharedVideoDiagResizeObserver) {
+    sharedVideoDiagResizeObserver.disconnect()
+    sharedVideoDiagResizeObserver = null
+  }
+  if (videoDiagWindowResizeListening) {
+    window.removeEventListener('resize', onDiagWindowResize)
+    videoDiagWindowResizeListening = false
+  }
+  for (let tracked of diagnosticTrackedVideos.values()) {
+    if (tracked.$card) {
+      delete tracked.$card.dataset.cpftVideoDiagTweetId
+      delete (/** @type {any} */ (tracked.$card)._cpftVideoDiagTweetId)
+    }
+  }
+  diagnosticTrackedVideos.clear()
+}
+//#endregion
+
+
 //#region rweb
 const rweb = function() {
 
@@ -4618,7 +5793,7 @@ const URL_PROFILE_RE = /^\/([a-zA-Z\d_]{1,20})(?:\/(affiliates|with_replies|supe
 // Matches URLs which show a user's Followers you know / Followers / Following tab
 const URL_PROFILE_FOLLOWS_RE = /^\/[a-zA-Z\d_]{1,20}\/(?:verified_followers|follow(?:ing|ers|ers_you_follow)|creator-subscriptions\/subscriptions)\/?$/
 /** Matches the start of any individual Tweet URL, capturing the user and id */
-const URL_TWEET_BASE_RE = /^\/([a-zA-Z\d_]{1,20})\/status\/(\d+)/
+// URL_TWEET_BASE_RE moved to shared helpers
 /** Matches the entire URL when viewing an individual Tweet, including optional end slash */
 const URL_TWEET_RE = /^\/([a-zA-Z\d_]{1,20})\/status\/(\d+)\/?$/
 /** Matches Tweet interactions page URLs, capturing the path segment for the current tab */
@@ -7446,6 +8621,95 @@ const configureThemeCss = (() => {
       }
     }
 
+    cssRules.push(`
+      @keyframes cpft_spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .cpft-translate-header-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        min-width: 28px;
+        min-height: 28px;
+        padding: 0;
+        margin: 0;
+        border: none;
+        border-radius: 9999px;
+        background: transparent;
+        cursor: pointer;
+        outline: none;
+        transition: background-color 0.15s ease, color 0.15s ease;
+        user-select: none;
+        -webkit-user-select: none;
+        align-self: center;
+      }
+      .cpft-translate-header-btn.cpft-translate-state-original {
+        color: #1D9BF0;
+      }
+      .cpft-translate-header-btn.cpft-translate-state-original:hover {
+        background-color: rgba(29, 155, 240, 0.1);
+        color: #1D9BF0;
+      }
+      .cpft-translate-header-btn.cpft-translate-state-translated {
+        color: #71767B;
+      }
+      .cpft-translate-header-btn.cpft-translate-state-translated:hover {
+        background-color: rgba(239, 243, 244, 0.1);
+        color: #e7e9ea;
+      }
+      .cpft-translate-header-btn .cpft-translate-icon {
+        width: 17px;
+        height: 17px;
+        fill: currentColor;
+      }
+      .cpft-translate-header-btn.cpft-translate-loading {
+        color: #1D9BF0;
+      }
+      .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner {
+        width: 16px;
+        height: 16px;
+        animation: cpft_spin 0.75s linear infinite;
+      }
+      .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner circle {
+        stroke: currentColor;
+        stroke-dasharray: 40;
+        stroke-dashoffset: 15;
+      }
+      .cpft-translated-text {
+        color: var(--cpft-text-primary, inherit);
+        user-select: text;
+        white-space: pre-wrap;
+      }
+      .cpft-single-video-card {
+        --cpft-max-video-height: min(70vh, 650px);
+        max-width: min(calc(var(--cpft-max-video-height) * var(--cpft-video-ar, 1)), 100%) !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        align-self: flex-start !important;
+      }
+      .cpft-single-video-card [data-testid="tweetPhoto"],
+      .cpft-single-video-card [data-testid="videoPlayer"],
+      .cpft-single-video-card [data-testid="videoComponent"] {
+        max-width: 100% !important;
+        width: 100% !important;
+        height: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+      :fullscreen .cpft-single-video-card,
+      .cpft-single-video-card:fullscreen,
+      .cpft-single-video-card [data-testid="videoPlayer"]:fullscreen,
+      .cpft-single-video-card video:fullscreen {
+        max-width: 100vw !important;
+        max-height: 100vh !important;
+        width: 100vw !important;
+        height: 100vh !important;
+      }
+    `)
+
     let css = cssRules.map(dedent).join('\n')
     if ($style == null) {
       $style = addStyle(css)
@@ -8342,6 +9606,11 @@ function onIndividualTweetTimelineChange($timeline, seen, options) {
       if (!hideItem && settings.restoreLinkHeadlines) {
         restoreLinkHeadline($tweet)
       }
+
+      if (!hideItem) {
+        processTweetTranslation($tweet)
+        processSingleVideoMedia($tweet)
+      }
     }
     else {
       let $article = $item.querySelector('article')
@@ -8638,6 +9907,11 @@ function onTimelineChange($timeline, page, seen, options = {}) {
 
       if (!hideItem && settings.restoreLinkHeadlines) {
         restoreLinkHeadline($tweet)
+      }
+
+      if (!hideItem) {
+        processTweetTranslation($tweet)
+        processSingleVideoMedia($tweet)
       }
     }
     else if (isOnNotificationsTimeline) {
@@ -9656,6 +10930,9 @@ async function tweakFocusedTweet($focusedTweet, options) {
       })
     }()
   }
+
+  processTweetTranslation($focusedTweet)
+  processSingleVideoMedia($focusedTweet)
 }
 
 async function tweakFollowListPage() {
@@ -10520,6 +11797,40 @@ function onSettingsChanged(changedSettings = new Set()) {
     // Clear the stored notification count if hiding notifications was disabled
     if (settings.hideNotifications == 'ignore') {
       hiddenNotificationCount = ''
+    }
+  }
+
+  if (changedSettings.has('tweetTranslation')) {
+    if (settings.tweetTranslation === 'off') {
+      teardownAutoTranslation()
+      for (const [tweetId, state] of tweetDisplayState.entries()) {
+        if (state === 'translated') {
+          const $translated = document.querySelector(`.cpft-translated-text[data-cpft-translation-for="${tweetId}"]`)
+          if ($translated) {
+            /** @type {HTMLElement} */ ($translated).style.display = 'none'
+            const $parent = $translated.parentElement
+            const $primary = $parent?.querySelector(`${TWEET_TEXT_SELECTOR}:not(.cpft-translated-text)`)
+            if ($primary) /** @type {HTMLElement} */ ($primary).style.display = ''
+          }
+        }
+      }
+      for (const $btn of document.querySelectorAll('.cpft-translate-header-btn')) {
+        $btn.remove()
+      }
+    } else {
+      document.querySelectorAll('article[data-testid="tweet"]').forEach(($tw) => {
+        processTweetTranslation($tw)
+      })
+    }
+  }
+
+  if (changedSettings.has('videoLayoutDiagnostics')) {
+    if (!settings.videoLayoutDiagnostics) {
+      teardownVideoDiagnostics()
+    } else {
+      document.querySelectorAll('article[data-testid="tweet"]').forEach(($tw) => {
+        processSingleVideoMedia($tw)
+      })
     }
   }
 
@@ -12159,6 +13470,77 @@ const configureCss = (() => {
       [id^="urt:"] > ul > li[data-index] > :is(.HiddenAd, .HiddenTweet) {
         display: none !important;
       }
+      .cpft-translate-header-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9999px;
+        margin-right: 2px;
+        cursor: pointer;
+        background: transparent;
+        border: none;
+        padding: 0;
+        transition: background-color 0.2s ease;
+      }
+      .cpft-translate-header-btn:hover {
+        background-color: rgba(29, 155, 240, 0.1);
+      }
+      .cpft-translate-header-btn .cpft-translate-icon {
+        width: 18px;
+        height: 18px;
+        fill: currentColor;
+      }
+      .cpft-translate-header-btn.cpft-translate-state-original {
+        color: #1D9BF0;
+      }
+      .cpft-translate-header-btn.cpft-translate-state-translated {
+        color: #71767B;
+      }
+      .cpft-translate-header-btn.cpft-translate-loading {
+        color: #1D9BF0;
+      }
+      .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner {
+        width: 16px;
+        height: 16px;
+        animation: cpft_spin 0.75s linear infinite;
+      }
+      .cpft-translate-header-btn.cpft-translate-loading .cpft-translate-spinner circle {
+        stroke: currentColor;
+        stroke-dasharray: 40;
+        stroke-dashoffset: 15;
+      }
+      .cpft-translated-text {
+        color: var(--cpft-text-primary, inherit);
+        user-select: text;
+        white-space: pre-wrap;
+      }
+      .cpft-single-video-card {
+        --cpft-max-video-height: min(70vh, 650px);
+        max-width: min(calc(var(--cpft-max-video-height) * var(--cpft-video-ar, 1)), 100%) !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        align-self: flex-start !important;
+      }
+      .cpft-single-video-card [data-testid="tweetPhoto"],
+      .cpft-single-video-card [data-testid="videoPlayer"],
+      .cpft-single-video-card [data-testid="videoComponent"] {
+        max-width: 100% !important;
+        width: 100% !important;
+        height: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+      }
+      :fullscreen .cpft-single-video-card,
+      .cpft-single-video-card:fullscreen,
+      .cpft-single-video-card [data-testid="videoPlayer"]:fullscreen,
+      .cpft-single-video-card video:fullscreen {
+        max-width: 100vw !important;
+        max-height: 100vh !important;
+        width: 100vw !important;
+        height: 100vh !important;
+      }
     `]
     /** @type {string[]} */
     let hideCssSelectors = [
@@ -12933,6 +14315,10 @@ function createIndividualTweetTimelineProcessor(tweetPath = currentPagePath) {
       let ad = type == 'PROMOTED_TWEET' || type == 'PAID_PARTNERSHIP' && reply
       $item.classList.toggle('HiddenAd', ad)
       $item.classList.toggle('HiddenTweet', hidden)
+      if (!hidden && $tweet) {
+        processTweetTranslation($tweet)
+        processSingleVideoMedia($tweet)
+      }
     }
   }
 }
@@ -13654,6 +15040,8 @@ function restoreFocusedTweetMetrics($focused, tweetPath, readState) {
  */
 function tweakFocusedTweet($focused, tweetPath, readState) {
   processUnavailableTweetContent($focused)
+  processTweetTranslation($focused)
+  processSingleVideoMedia($focused)
   let cleanupLocation = null
   if (settings.addFocusedTweetAccountLocation) {
     let $time = $focused.querySelector(`a[href="${tweetPath}"][data-base-ui-tooltip-trigger]`)
@@ -14070,6 +15458,17 @@ function onSettingsChanged(changedSettings = new Set()) {
   if (!hasSeparatedTweetsTimeline() || settings.disableHomeTimeline) separatedTweetsTimelineSelected = false
   onTitleChange(document.title, {force: true})
   if (changedSettings.has('revertXBranding') || changedSettings.has('hideNotifications')) observeFavicon()
+  if (changedSettings.has('tweetTranslation')) {
+    if (settings.tweetTranslation === 'off') {
+      teardownAutoTranslation()
+      for (const $btn of document.querySelectorAll('.cpft-translate-header-btn')) {
+        $btn.remove()
+      }
+    }
+  }
+  if (changedSettings.has('videoLayoutDiagnostics') && !settings.videoLayoutDiagnostics) {
+    teardownVideoDiagnostics()
+  }
   observeOverlays.refresh()
 }
 
